@@ -1,0 +1,74 @@
+# Qlib回测引擎配置
+qlib:
+  # 数据目录 (相对于qlib init的provider_uri)
+  provider_uri: ./data/qlib_bin
+  # 初始化参数
+  init:
+    provider_uri: ./data/qlib_bin
+    region: cn  # 中国市场
+    # 表达式缓存
+    expression_cache: None
+    # 数据层缓存
+    dataset_cache: None
+    # 内存限制
+    mem_cache_size_limit: 30GB
+
+  # 数据处理器配置
+  data_handler:
+    start_time: 2015-01-01
+    end_time: 2026-08-18
+    fit_start_time: 2015-01-01
+    fit_end_time: 2020-12-31
+    instruments: all  # all | csi300 | csi500 | csi1000
+    handler_group:
+      - class: Alpha158
+        module_path: qlib.contrib.data.handler
+
+  # 模型配置
+  model:
+    # LightGBM
+    lightgbm:
+      class: LGBModel
+      module_path: qlib.contrib.model.gbdt
+      loss: mse
+      num_leaves: 64
+      learning_rate: 0.05
+      n_estimators: 500
+      colsample_bytree: 0.8
+      subsample: 0.8
+      lambda_l1: 0.1
+      lambda_l2: 0.1
+
+    # Transformer (可选)
+    transformer:
+      class: TransformerModel
+      module_path: qlib.contrib.model.pytorch_transformer
+      d_model: 32
+      nhead: 4
+      num_layers: 2
+      dropout: 0.1
+
+  # 回测配置
+  backtest:
+    start_time: 2021-01-01
+    end_time: 2026-08-18
+    account: 100000000  # 初始资金1亿
+    benchmark: SH000300  # 沪深300
+    exchange: all
+    # 交易成本
+    cost:
+      buy_cost: 0.0003   # 买入佣金万三
+      sell_cost: 0.0013  # 卖出佣金万三+印花税千一
+      min_cost: 5        # 最低5元
+
+  # 组合优化
+  portfolio:
+    class: EnhancedIndexing
+    module_path: qlib.contrib.strategy
+    # 权重约束
+    weights_limit: 0.05  # 单票最大5%
+
+  # 特征配置 (Alpha158)
+  alpha:
+    class: Alpha158
+    module_path: qlib.contrib.data.handler

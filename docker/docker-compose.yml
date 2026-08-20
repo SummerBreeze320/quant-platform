@@ -1,0 +1,39 @@
+# Quant Platform - Supplementary Docker Services
+# Note: MySQL/Redis/Kafka/ES/MinIO are already deployed at D:\Program Files\MyService
+# This file only starts supplementary services if needed.
+
+version: "3.8"
+
+services:
+  # Jupyter Lab for interactive research
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    container_name: quant-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ../:/workspace
+      - ../data:/workspace/data
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    command: jupyter lab --NotebookApp.token='' --NotebookApp.password=''
+    networks:
+      - quant-net
+
+  # Grafana for monitoring
+  grafana:
+    image: grafana/grafana:latest
+    container_name: quant-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - quant-net
+
+networks:
+  quant-net:
+    driver: bridge
+
+volumes:
+  grafana-data:

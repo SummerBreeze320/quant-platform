@@ -1,0 +1,64 @@
+# Wind数据源配置
+wind:
+  # WindPy连接参数
+  # 需要本机安装Wind终端并运行中
+  enable: true
+  retry_times: 3
+  retry_interval: 5  # 秒
+
+  # A股行情字段 (wsd)
+  stock_fields:
+    - open          # 开盘价
+    - high          # 最高价
+    - low           # 最低价
+    - close         # 收盘价
+    - volume        # 成交量(手)
+    - amount         # 成交额(千元)
+    - adjfactor     # 复权因子
+    - pct_chg       # 涨跌幅(%)
+    - turn          # 换手率(%)
+    - free_float    # 自由流通股本
+    - total_share   # 总股本
+    - float_share   # 流通股本
+
+  # 财务字段
+  finance_fields:
+    - net_profit_is           # 净利润
+    - total_assets            # 总资产
+    - total_equity            # 股东权益
+    - operating_revenue       # 营业收入
+    - roe_ttm                 # ROE(TTM)
+    - roa_ttm                 # ROA(TTM)
+    - debt_to_assets          # 资产负债率
+    - gross_profit_margin     # 毛利率
+    - net_profit_margin       # 净利率
+
+  # ETF行情字段
+  etf_fields:
+    - open
+    - high
+    - low
+    - close
+    - volume
+    - amount
+    - pct_chg
+
+  # 复权方式: F=前复权, B=后复权, N=不复权
+  adjust: F
+
+  # 指数成分股
+  index_list:
+    - 000300.SH    # 沪深300
+    - 000905.SH    # 中证500
+    - 000852.SH    # 中证1000
+    - 000016.SH    # 上证50
+
+  # 默认时间范围
+  default_start_date: "2015-01-01"
+  default_end_date: "2026-08-18"
+
+  # 实时行情
+  realtime:
+    enable: false
+    interval: 3  # 推送间隔(秒)
+    stock_list: []  # 留空则全市场
