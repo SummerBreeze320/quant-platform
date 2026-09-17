@@ -1,0 +1,36 @@
+system:
+  project_name: "QuantCopliot"
+  timezone: "Asia/Shanghai"
+
+data:
+  market: "A-Share"
+  universe:
+    - "000300.SH"   # 沪深300
+    - "000905.SH"   # 中证500
+    - "000852.SH"   # 中证1000
+    - "all"         # 全市场
+  start_date: "2015-01-01"
+  fields:
+    - "OPEN"
+    - "HIGH"
+    - "LOW"
+    - "CLOSE"
+    - "VOLUME"
+    - "AMT"
+    - "ADJFACTOR"
+    - "VWAP"
+
+strategy:
+  top_k: 30
+  n_drop: 5
+  benchmark: "000300.SH"
+  commission_rate: 0.0002   # 万二
+  stamp_tax_rate: 0.0005    # 千分之0.5 (卖出)
+  slippage: 0.0005          # 单边千分之0.5
+
+agent:
+  exploration_frequency: "weekly"
+  quality_gate:
+    min_abs_ic: 0.035
+    min_icir: 0.5
+    max_correlation: 0.6
