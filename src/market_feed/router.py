@@ -101,6 +101,9 @@ class SignalRouter:
         # 柜台撮合成交
         trade = self.broker.submit_order(order)
         if trade:
+            if self.risk_checker is not None:
+                updated_account = self.broker.get_account(signal.strategy_id)
+                self.risk_checker.cb_manager.update_equity(signal.strategy_id, updated_account.total_equity)
             record["status"] = "EXECUTED"
             record["trade_id"] = trade.trade_id
             record["detail"] = f"成交成功: 成交价 {trade.price}, 股数 {trade.volume}"

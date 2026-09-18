@@ -1,7 +1,7 @@
 import time
 import uuid
 from typing import Dict, Optional
-from src.market_feed.models import MarketTick, SignalEvent, SignalDirection
+from src.market_feed.models import MarketTick, SignalEvent, SignalDirection, IndicatorValue
 from src.market_feed.indicators import StreamingVWAP, StreamingBollingerBands, OrderFlowImbalance
 
 class CooldownManager:
@@ -32,6 +32,20 @@ class SignalEngine:
         self.vwaps: Dict[str, StreamingVWAP] = {}
         self.bollingers: Dict[str, StreamingBollingerBands] = {}
         self.ofis: Dict[str, OrderFlowImbalance] = {}
+        self.latest_indicators: Dict[str, Dict[str, IndicatorValue]] = {}
+
+    def get_indicator_snapshot(self, symbol: str) -> dict:
+        """Return the last calculation without advancing any indicator."""
+        values = self.latest_indicators.get(symbol)
+        if values is None:
+            return {"symbol": symbol, "vwap": 0.0, "bollinger": {"mean": 0.0, "pct_b": 0.5}, "ofi": 0.0}
+        bollinger = values["bollinger"]
+        return {
+            "symbol": symbol,
+            "vwap": values["vwap"].value,
+            "bollinger": {"mean": bollinger.value, **bollinger.details},
+            "ofi": values["ofi"].value,
+        }
 
     def _get_or_create_indicators(self, symbol: str):
         if symbol not in self.vwaps:
@@ -46,6 +60,7 @@ class SignalEngine:
         res_vwap = vwap_ind.update(tick)
         res_bb = bb_ind.update(tick)
         res_ofi = ofi_ind.update(tick)
+        self.latest_indicators[tick.symbol] = {"vwap": res_vwap, "bollinger": res_bb, "ofi": res_ofi}
 
         vwap_val = res_vwap.value
         pct_b = res_bb.details.get("pct_b", 0.5)
