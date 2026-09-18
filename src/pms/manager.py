@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from src.common.logger import logger
 from src.pms.models import (
     MasterAccount,
@@ -23,6 +23,7 @@ class PortfolioManager:
         broker: Optional[PaperBroker] = None,
         allocator: Optional[CapitalAllocator] = None,
         circuit_breaker: Optional[CircuitBreakerManager] = None,
+        storage: Optional[Any] = None,
     ):
         self.master = MasterAccount(
             master_id=master_id,
@@ -32,6 +33,8 @@ class PortfolioManager:
         self.broker = broker
         self.allocator = allocator or CapitalAllocator()
         self.circuit_breaker = circuit_breaker
+        self.storage = storage
+
 
     def deposit_to_master(self, amount: float) -> float:
         if amount <= 0:
@@ -133,6 +136,8 @@ class PortfolioManager:
             transfer_amount=amount,
             reason=reason or ("注资" if amount > 0 else "抽资"),
         )
+        if self.storage is not None:
+            self.storage.save_transfer(transfer, master_id=self.master.master_id)
         return transfer
 
     def apply_allocation_plan(self, plan: CapitalAllocationPlan) -> List[CashTransfer]:

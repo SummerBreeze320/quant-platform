@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from src.execution_engine.models import (
     Order, Trade, Position, AccountState, OrderDirection, OrderStatus
 )
@@ -11,13 +11,21 @@ class PaperBroker(BaseBrokerGateway):
         self,
         commission_rate: float = 0.0002,
         stamp_tax_rate: float = 0.0005,
-        slippage_rate: float = 0.0005
+        slippage_rate: float = 0.0005,
+        storage: Optional[Any] = None,
     ):
         self.commission_rate = commission_rate
         self.stamp_tax_rate = stamp_tax_rate
         self.slippage_rate = slippage_rate
+        self.storage = storage
         self.accounts: Dict[str, AccountState] = {}
         self.trades: List[Trade] = []
+
+    def restore_from_storage(self) -> int:
+        """从数据库恢复已有账户和持仓"""
+        if self.storage is not None:
+            return self.storage.restore_broker_state(self)
+        return 0
 
     def create_account(self, account_id: str, initial_cash: float = 1_000_000.0) -> AccountState:
         acc = AccountState(
@@ -27,6 +35,8 @@ class PaperBroker(BaseBrokerGateway):
             positions={}
         )
         self.accounts[account_id] = acc
+        if self.storage is not None:
+            self.storage.save_account(acc)
         return acc
 
     def get_account(self, account_id: str) -> AccountState:
@@ -56,6 +66,8 @@ class PaperBroker(BaseBrokerGateway):
             if total_cost > acc.available_cash:
                 order.status = OrderStatus.REJECTED
                 order.reject_reason = f"现金不足: 所需 {total_cost:.2f} 大于可用 {acc.available_cash:.2f}"
+                if self.storage is not None:
+                    self.storage.save_order(order)
                 return None
 
             # Execute Buy
@@ -87,6 +99,11 @@ class PaperBroker(BaseBrokerGateway):
             )
             self.trades.append(trade)
             self.get_account(order.account_id)
+
+            if self.storage is not None:
+                self.storage.save_order(order)
+                self.storage.save_trade(trade)
+                self.storage.save_account(acc)
             return trade
 
         elif order.direction == OrderDirection.SELL:
@@ -95,6 +112,8 @@ class PaperBroker(BaseBrokerGateway):
                 avail = pos.available_volume if pos else 0
                 order.status = OrderStatus.REJECTED
                 order.reject_reason = f"可用持仓不足(T+1受限): 申报 {vol} 可用 {avail}"
+                if self.storage is not None:
+                    self.storage.save_order(order)
                 return None
 
             fill_price = round(price * (1.0 - self.slippage_rate), 4)
@@ -108,8 +127,10 @@ class PaperBroker(BaseBrokerGateway):
             pos.total_volume -= vol
             pos.available_volume -= vol
             pos.market_value = pos.total_volume * fill_price
+            removed_sym = False
             if pos.total_volume == 0:
                 del acc.positions[sym]
+                removed_sym = True
 
             order.status = OrderStatus.FILLED
             order.filled_volume = vol
@@ -129,6 +150,13 @@ class PaperBroker(BaseBrokerGateway):
             )
             self.trades.append(trade)
             self.get_account(order.account_id)
+
+            if self.storage is not None:
+                self.storage.save_order(order)
+                self.storage.save_trade(trade)
+                self.storage.save_account(acc)
+                if removed_sym:
+                    self.storage.delete_position(order.account_id, sym)
             return trade
 
         return None
@@ -139,4 +167,7 @@ class PaperBroker(BaseBrokerGateway):
             for pos in acc.positions.values():
                 pos.available_volume += pos.frozen_volume
                 pos.frozen_volume = 0
+            if self.storage is not None:
+                self.storage.save_account(acc)
             logger.info(f"Overnight settlement completed for account {acc.account_id} (T+1 shares unlocked)")
+

@@ -14,6 +14,10 @@ from src.risk_engine.pre_trade import PreTradeRiskChecker
 from src.service.market_runtime import MarketRuntime
 
 
+from typing import Optional, Callable
+from src.common.db import SessionLocal
+from src.execution_engine.persistence import TradingStorage
+
 class ServiceRuntime:
     """One account ledger and risk policy per app, shared by all API routes.
 
@@ -21,9 +25,23 @@ class ServiceRuntime:
     remains a single-process simulation; separate workers do not share state.
     """
 
-    def __init__(self):
+    def __init__(self, session_factory: Optional[Callable] = None):
         self.lock = RLock()
-        self.broker = PaperBroker()
+        if session_factory is not None:
+            self.storage: Optional[TradingStorage] = TradingStorage(session_factory)
+        else:
+            try:
+                self.storage = TradingStorage(SessionLocal)
+            except Exception:
+                self.storage = None
+
+        self.broker = PaperBroker(storage=self.storage)
+        if self.storage is not None:
+            try:
+                self.broker.restore_from_storage()
+            except Exception:
+                pass
+
         self.circuit_breaker = CircuitBreakerManager()
         self.alert_manager = RiskAlertManager()
         self.risk_checker = PreTradeRiskChecker(
@@ -36,11 +54,17 @@ class ServiceRuntime:
             gateway=self.broker, risk_checker=self.risk_checker,
             circuit_breaker=self.circuit_breaker,
         )
-        self.pms_manager = PortfolioManager(broker=self.broker, circuit_breaker=self.circuit_breaker)
-        self.aggregator = PortfolioAggregator(circuit_breaker=self.circuit_breaker)
-        self.pms_manager.register_strategy(
-            "hft_stream_01", "Market streaming signals", initial_budget=5_000_000,
+        self.pms_manager = PortfolioManager(
+            broker=self.broker, circuit_breaker=self.circuit_breaker, storage=self.storage
         )
+        self.aggregator = PortfolioAggregator(circuit_breaker=self.circuit_breaker)
+        if (
+            "hft_stream_01" not in self.pms_manager.master.strategies
+            and "hft_stream_01" not in self.broker.accounts
+        ):
+            self.pms_manager.register_strategy(
+                "hft_stream_01", "Market streaming signals", initial_budget=5_000_000,
+            )
         self._market = None
 
     @property

@@ -33,13 +33,33 @@ def get_account(account_id: str = Query("default"), runtime: ServiceRuntime = De
     with runtime.lock:
         return runtime.broker.get_account(account_id).model_copy(deep=True)
 
+
 @router.post("/settle")
 def settle_overnight(req: SettleRequest, runtime: ServiceRuntime = Depends(get_runtime)):
     with runtime.lock:
         runtime.broker.settle_overnight(req.account_id)
     return {"status": "SUCCESS", "message": f"Overnight settlement completed for {req.account_id}"}
 
-@router.get("/trades", response_model=List[Trade])
-def get_trades(account_id: str = Query("default"), runtime: ServiceRuntime = Depends(get_runtime)):
+@router.get("/trades")
+def get_trades(
+    account_id: str = Query("default"),
+    limit: int = Query(100, ge=1, le=500),
+    runtime: ServiceRuntime = Depends(get_runtime)
+):
     with runtime.lock:
-        return [t.model_copy(deep=True) for t in runtime.broker.trades if t.account_id == account_id]
+        if runtime.storage is not None:
+            db_trades = runtime.storage.get_historical_trades(account_id=account_id, limit=limit)
+            if db_trades:
+                return db_trades
+        return [t.model_copy(deep=True) for t in runtime.broker.trades if t.account_id == account_id][:limit]
+
+@router.get("/orders")
+def get_orders(
+    account_id: str = Query("default"),
+    limit: int = Query(100, ge=1, le=500),
+    runtime: ServiceRuntime = Depends(get_runtime)
+):
+    with runtime.lock:
+        if runtime.storage is not None:
+            return runtime.storage.get_historical_orders(account_id=account_id, limit=limit)
+        return []

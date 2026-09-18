@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from src.pms.models import (
     StrategyType,
@@ -87,3 +87,15 @@ def get_lookthrough_portfolio(runtime: ServiceRuntime = Depends(get_runtime)):
         mgr = runtime.pms_manager
         mgr.sync_from_broker()
         return runtime.aggregator.aggregate(mgr.master)
+
+@router.get("/transfers")
+def get_transfers(
+    strategy_id: Optional[str] = Query(None, description="策略ID筛选"),
+    limit: int = Query(100, ge=1, le=500),
+    runtime: ServiceRuntime = Depends(get_runtime)
+):
+    with runtime.lock:
+        if runtime.storage is not None:
+            return runtime.storage.get_historical_transfers(strategy_id=strategy_id, limit=limit)
+        return []
+

@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
     logger.info("QuantCopliot service stopped.")
 
-def create_app() -> FastAPI:
+def create_app(session_factory=None) -> FastAPI:
     """Factory creating and configuring the FastAPI application."""
     app = FastAPI(
         title="QuantCopliot",
@@ -55,7 +55,8 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan
     )
-    app.state.runtime = ServiceRuntime()
+    app.state.runtime = ServiceRuntime(session_factory=session_factory)
+
 
     # CORS configuration
     app.add_middleware(
