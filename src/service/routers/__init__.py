@@ -6,6 +6,7 @@ from src.service.routers.agent_router import router as agent_router
 from src.service.routers.optimizer_router import router as optimizer_router
 from src.service.routers.risk_router import router as risk_router
 from src.service.routers.execution_router import router as execution_router
+from src.service.routers.pms_router import router as pms_router
 
 __all__ = [
     "data_router",
@@ -16,4 +17,5 @@ __all__ = [
     "optimizer_router",
     "risk_router",
     "execution_router",
+    "pms_router",
 ]

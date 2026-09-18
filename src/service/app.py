@@ -15,6 +15,7 @@ from src.service.routers import (
     optimizer_router,
     risk_router,
     execution_router,
+    pms_router,
 )
 
 settings = get_settings()
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(optimizer_router, prefix="/api/v1")
     app.include_router(risk_router, prefix="/api/v1")
     app.include_router(execution_router, prefix="/api/v1")
+    app.include_router(pms_router, prefix="/api/v1")
 
     return app
 
