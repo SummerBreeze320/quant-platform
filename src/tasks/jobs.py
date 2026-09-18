@@ -160,3 +160,53 @@ def job_weekend_factor_mining(theme: str = "reversal", rounds: int = 3, db: Opti
     finally:
         if should_close:
             sess.close()
+
+
+def job_premarket_rebalance(
+    strategy_id: str = "hft_stream_01",
+    trade_date: Optional[str] = None,
+    algo_type: str = "DIRECT",
+    execution_mode: str = "SYNC",
+    interval_seconds: float = 0.0,
+    runtime: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    09:15 盘前根据最新 Alpha 分数与凸优化求解器生成日内调仓计划并执行
+    """
+    if runtime is None:
+        try:
+            from src.service.app import app
+            runtime = getattr(app.state, "runtime", None)
+        except Exception:
+            runtime = None
+    from src.tasks.pipeline import PremarketRebalancePipeline
+    return PremarketRebalancePipeline.run(
+        strategy_id=strategy_id,
+        trade_date=trade_date,
+        algo_type=algo_type,
+        execution_mode=execution_mode,
+        interval_seconds=interval_seconds,
+        runtime=runtime,
+    )
+
+
+def job_daily_settlement(
+    account_id: Optional[str] = None,
+    trade_date: Optional[str] = None,
+    runtime: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    15:30 盘后日终清算交收与 T+1 可用股份解冻
+    """
+    if runtime is None:
+        try:
+            from src.service.app import app
+            runtime = getattr(app.state, "runtime", None)
+        except Exception:
+            runtime = None
+    from src.tasks.pipeline import DailySettlementPipeline
+    return DailySettlementPipeline.run(
+        account_id=account_id,
+        trade_date=trade_date,
+        runtime=runtime,
+    )

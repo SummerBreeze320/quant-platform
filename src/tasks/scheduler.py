@@ -1,7 +1,13 @@
 from typing import Optional, List, Any
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from src.tasks.jobs import job_daily_data_sync, job_daily_model_predict, job_weekend_factor_mining
+from src.tasks.jobs import (
+    job_daily_data_sync,
+    job_daily_model_predict,
+    job_weekend_factor_mining,
+    job_premarket_rebalance,
+    job_daily_settlement,
+)
 from src.common.logger import logger
 
 class QuantScheduler:
@@ -16,7 +22,25 @@ class QuantScheduler:
         if self._is_configured:
             return
 
-        # 1. 16:30 Mon-Fri: Post-market daily data sync
+        # 1. 09:15 Mon-Fri: Pre-market rebalance planning & execution
+        self.scheduler.add_job(
+            job_premarket_rebalance,
+            trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=15),
+            id="premarket_rebalance",
+            name="Pre-Market Rebalance Planning",
+            replace_existing=True
+        )
+
+        # 2. 15:30 Mon-Fri: Post-market day-end settlement & T+1 share unfreezing
+        self.scheduler.add_job(
+            job_daily_settlement,
+            trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=30),
+            id="daily_settlement",
+            name="Post-Market Day-End Settlement",
+            replace_existing=True
+        )
+
+        # 3. 16:30 Mon-Fri: Post-market daily data sync
         self.scheduler.add_job(
             job_daily_data_sync,
             trigger=CronTrigger(day_of_week="mon-fri", hour=16, minute=30),
@@ -25,7 +49,7 @@ class QuantScheduler:
             replace_existing=True
         )
 
-        # 2. 17:15 Mon-Fri: Daily model prediction & score caching
+        # 4. 17:15 Mon-Fri: Daily model prediction & score caching
         self.scheduler.add_job(
             job_daily_model_predict,
             trigger=CronTrigger(day_of_week="mon-fri", hour=17, minute=15),
@@ -34,7 +58,7 @@ class QuantScheduler:
             replace_existing=True
         )
 
-        # 3. 10:00 Sunday: Weekend RD-Agent factor mining loop
+        # 5. 10:00 Sunday: Weekend RD-Agent factor mining loop
         self.scheduler.add_job(
             job_weekend_factor_mining,
             trigger=CronTrigger(day_of_week="sun", hour=10, minute=0),
@@ -58,10 +82,14 @@ class QuantScheduler:
         """Gracefully terminates background scheduler."""
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
-            logger.info("QuantScheduler shut down.")
+        self.scheduler = BackgroundScheduler()
+        self._is_configured = False
+        logger.info("QuantScheduler shut down and reset.")
 
     def get_jobs(self) -> List[Any]:
         """Returns list of active scheduled jobs."""
+        if not self._is_configured:
+            self.configure_jobs()
         return self.scheduler.get_jobs()
 
 _scheduler_instance = QuantScheduler()
