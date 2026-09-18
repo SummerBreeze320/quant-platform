@@ -19,8 +19,14 @@ class ExecutionCoordinator:
         circuit_breaker: Optional[CircuitBreakerManager] = None
     ):
         self.gateway = gateway or PaperBroker()
-        self.risk_checker = risk_checker or PreTradeRiskChecker()
-        self.circuit_breaker = circuit_breaker or CircuitBreakerManager()
+        if risk_checker is not None:
+            if circuit_breaker is not None and risk_checker.cb_manager is not circuit_breaker:
+                raise ValueError("risk_checker and coordinator must share the same circuit breaker")
+            self.circuit_breaker = risk_checker.cb_manager
+            self.risk_checker = risk_checker
+        else:
+            self.circuit_breaker = circuit_breaker or CircuitBreakerManager()
+            self.risk_checker = PreTradeRiskChecker(cb_manager=self.circuit_breaker)
         self.algo_registry: Dict[AlgoType, BaseExecutionAlgo] = {
             AlgoType.DIRECT: DirectAlgo(),
             AlgoType.TWAP: TwapAlgo(),

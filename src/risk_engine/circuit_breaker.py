@@ -76,6 +76,30 @@ class CircuitBreakerManager:
         self._sync_redis(account_id, updated_state)
         return updated_state
 
+    def adjust_cash_flow(
+        self, account_id: str, equity_before: float, equity_after: float
+    ) -> CircuitBreakerState:
+        """Rebase the watermark for external capital, without clearing risk history.
+
+        Scaling both equity and its watermark preserves the current drawdown
+        ratio. A zero-balance account starts a new capital baseline on funding,
+        but retains its existing halt and maximum drawdown until manual reset.
+        """
+        if equity_before < 0 or equity_after < 0:
+            raise ValueError("Cash flow equities must be non-negative")
+        state = self.update_equity(account_id, equity_before)
+        watermark = (
+            state.high_watermark * equity_after / equity_before
+            if equity_before > 0 else equity_after
+        )
+        adjusted = state.model_copy(update={
+            "current_equity": equity_after,
+            "high_watermark": watermark,
+        })
+        self._states[account_id] = adjusted
+        self._sync_redis(account_id, adjusted)
+        return adjusted
+
     def reset(self, account_id: str, reset_watermark: bool = True) -> CircuitBreakerState:
         state = self.get_state(account_id)
         hw = state.current_equity if (reset_watermark and state.current_equity > 0) else state.high_watermark

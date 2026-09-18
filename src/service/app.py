@@ -6,6 +6,7 @@ from src.common.db import init_db
 from src.common.logger import logger
 from src.qlib_engine.initializer import init_qlib
 from src.tasks.scheduler import get_scheduler
+from src.service.runtime import ServiceRuntime
 from src.service.routers import (
     data_router,
     factor_router,
@@ -16,6 +17,7 @@ from src.service.routers import (
     risk_router,
     execution_router,
     pms_router,
+    market_router,
 )
 
 settings = get_settings()
@@ -53,6 +55,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan
     )
+    app.state.runtime = ServiceRuntime()
 
     # CORS configuration
     app.add_middleware(
@@ -83,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(risk_router, prefix="/api/v1")
     app.include_router(execution_router, prefix="/api/v1")
     app.include_router(pms_router, prefix="/api/v1")
+    app.include_router(market_router, prefix="/api/v1")
 
     return app
 

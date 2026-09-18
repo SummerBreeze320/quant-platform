@@ -11,6 +11,7 @@ from src.pms.models import (
 )
 from src.pms.allocator import CapitalAllocator
 from src.execution_engine.gateway.paper_broker import PaperBroker
+from src.risk_engine.circuit_breaker import CircuitBreakerManager
 
 class PortfolioManager:
     """资产组合与母子账户生命周期管理器"""
@@ -21,6 +22,7 @@ class PortfolioManager:
         initial_reserve: float = 10_000_000.0,
         broker: Optional[PaperBroker] = None,
         allocator: Optional[CapitalAllocator] = None,
+        circuit_breaker: Optional[CircuitBreakerManager] = None,
     ):
         self.master = MasterAccount(
             master_id=master_id,
@@ -29,6 +31,7 @@ class PortfolioManager:
         )
         self.broker = broker
         self.allocator = allocator or CapitalAllocator()
+        self.circuit_breaker = circuit_breaker
 
     def deposit_to_master(self, amount: float) -> float:
         if amount <= 0:
@@ -47,6 +50,8 @@ class PortfolioManager:
         """注册并激活子策略账户"""
         if strategy_id in self.master.strategies:
             raise ValueError(f"策略 ID '{strategy_id}' 已存在")
+        if self.broker is not None and strategy_id in self.broker.accounts:
+            raise ValueError(f"交易账户 '{strategy_id}' 已存在，不能通过注册策略覆盖其资金与持仓")
         if initial_budget > self.master.reserve_cash:
             raise ValueError(
                 f"预备金不足: 母账户可用 {self.master.reserve_cash:.2f}, 所需 {initial_budget:.2f}"
@@ -68,6 +73,8 @@ class PortfolioManager:
 
         if self.broker is not None:
             self.broker.create_account(account_id=strategy_id, initial_cash=initial_budget)
+        if self.circuit_breaker is not None:
+            self.circuit_breaker.update_equity(strategy_id, initial_budget)
 
         self.refresh_total_equity()
         logger.info(
@@ -81,6 +88,12 @@ class PortfolioManager:
             raise ValueError(f"未找到策略 ID '{strategy_id}'")
 
         strat = self.master.strategies[strategy_id]
+        if self.broker is not None:
+            b_acc = self.broker.get_account(strategy_id)
+            strat.current_cash = b_acc.available_cash
+            strat.total_equity = b_acc.total_equity
+            strat.positions = b_acc.positions
+        equity_before = strat.total_equity
 
         if amount > 0:
             if self.master.reserve_cash < amount:
@@ -110,6 +123,8 @@ class PortfolioManager:
                 b_acc.available_cash -= withdraw
                 b_acc.total_equity -= withdraw
 
+        if self.circuit_breaker is not None and amount != 0:
+            self.circuit_breaker.adjust_cash_flow(strategy_id, equity_before, strat.total_equity)
         strat.updated_at = datetime.now().isoformat()
         self.refresh_total_equity()
 
