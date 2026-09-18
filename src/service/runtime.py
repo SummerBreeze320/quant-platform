@@ -76,7 +76,13 @@ class ServiceRuntime:
         # Redis connection probing belongs to first market use, not module import.
         with self.lock:
             if self._market is None:
-                self._market = MarketRuntime(self.broker, self.risk_checker, self.lock)
+                self._market = MarketRuntime(
+                    broker=self.broker,
+                    risk_checker=self.risk_checker,
+                    lock=self.lock,
+                    circuit_breaker=self.circuit_breaker,
+                    alert_manager=self.alert_manager,
+                )
             return self._market
 
 

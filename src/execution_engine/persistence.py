@@ -90,6 +90,8 @@ class TradingStorage:
                             frozen_volume=pos.frozen_volume,
                             avg_cost=pos.avg_cost,
                             market_value=pos.market_value,
+                            last_price=pos.last_price,
+                            unrealized_pnl=pos.unrealized_pnl,
                         )
                         session.add(pos_rec)
                     else:
@@ -98,6 +100,9 @@ class TradingStorage:
                         pos_rec.frozen_volume = pos.frozen_volume
                         pos_rec.avg_cost = pos.avg_cost
                         pos_rec.market_value = pos.market_value
+                        pos_rec.last_price = pos.last_price
+                        pos_rec.unrealized_pnl = pos.unrealized_pnl
+
             return True
         except Exception as e:
             logger.warning(f"Failed to save account {account.account_id}: {e}")
@@ -124,6 +129,8 @@ class TradingStorage:
                         frozen_volume=pos.frozen_volume,
                         avg_cost=pos.avg_cost,
                         market_value=pos.market_value,
+                        last_price=pos.last_price,
+                        unrealized_pnl=pos.unrealized_pnl,
                     )
                     session.add(pos_rec)
                 else:
@@ -132,6 +139,9 @@ class TradingStorage:
                     pos_rec.frozen_volume = pos.frozen_volume
                     pos_rec.avg_cost = pos.avg_cost
                     pos_rec.market_value = pos.market_value
+                    pos_rec.last_price = pos.last_price
+                    pos_rec.unrealized_pnl = pos.unrealized_pnl
+
             return True
         except Exception as e:
             logger.warning(f"Failed to save position {pos.symbol} for account {account_id}: {e}")
@@ -264,7 +274,15 @@ class TradingStorage:
                             frozen_volume=p.frozen_volume,
                             avg_cost=p.avg_cost,
                             market_value=p.market_value,
+                            last_price=getattr(p, "last_price", 0.0),
+                            unrealized_pnl=getattr(p, "unrealized_pnl", 0.0),
+                            unrealized_pnl_ratio=(
+                                (getattr(p, "last_price", 0.0) - p.avg_cost) / p.avg_cost
+                                if p.avg_cost > 0
+                                else 0.0
+                            ),
                         )
+
                     broker.accounts[acc.account_id] = acc
                     restored += 1
                 logger.info(f"Restored {restored} trading accounts and their positions from database.")

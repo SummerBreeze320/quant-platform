@@ -30,6 +30,10 @@ class Position(BaseModel):
     frozen_volume: int = 0
     avg_cost: float = 0.0
     market_value: float = 0.0
+    last_price: float = 0.0
+    unrealized_pnl: float = 0.0
+    unrealized_pnl_ratio: float = 0.0
+
 
 class AccountState(BaseModel):
     account_id: str = "default"

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional, Dict, List, Any
 from src.execution_engine.models import (
     Order, Trade, Position, AccountState, OrderDirection, OrderStatus
@@ -47,6 +48,9 @@ class PaperBroker(BaseBrokerGateway):
         mv_total = sum(p.market_value for p in acc.positions.values())
         acc.total_equity = acc.available_cash + mv_total
         return acc
+
+    def get_all_accounts(self) -> List[AccountState]:
+        return [self.get_account(acc_id) for acc_id in list(self.accounts.keys())]
 
     def cancel_order(self, order_id: str) -> bool:
         return True
@@ -170,4 +174,29 @@ class PaperBroker(BaseBrokerGateway):
             if self.storage is not None:
                 self.storage.save_account(acc)
             logger.info(f"Overnight settlement completed for account {acc.account_id} (T+1 shares unlocked)")
+
+    def update_market_price(self, symbol: str, price: float) -> List[AccountState]:
+        """盘中根据实时价格动态重估持仓市值与未实现浮盈浮亏"""
+        if price <= 0:
+            return []
+        updated_accounts: List[AccountState] = []
+        for acc in self.accounts.values():
+            if symbol in acc.positions:
+                pos = acc.positions[symbol]
+                pos.last_price = price
+                pos.market_value = round(pos.total_volume * price, 4)
+                pos.unrealized_pnl = round((price - pos.avg_cost) * pos.total_volume, 4)
+                pos.unrealized_pnl_ratio = round(
+                    (price - pos.avg_cost) / pos.avg_cost if pos.avg_cost > 0 else 0.0, 6
+                )
+                # 重新计算账户总权益
+                mv_total = sum(p.market_value for p in acc.positions.values())
+                acc.total_equity = round(acc.available_cash + mv_total, 4)
+                acc.updated_at = datetime.now().isoformat()
+                if self.storage is not None:
+                    self.storage.save_position(acc.account_id, pos)
+                    self.storage.save_account(acc)
+                updated_accounts.append(acc)
+        return updated_accounts
+
 

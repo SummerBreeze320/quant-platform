@@ -201,7 +201,7 @@ def test_risk_alert_manager():
 def test_fastapi_risk_router_endpoints(client):
     # 1. /api/v1/risk/check_order
     order_payload = {
-        "account_id": "api_test_acc",
+        "account_id": "api_risk_endpoint_acc",
         "symbol": "600519.SH",
         "direction": "BUY",
         "price": 800.0,
@@ -215,7 +215,7 @@ def test_fastapi_risk_router_endpoints(client):
 
     # 2. /api/v1/risk/check_portfolio
     portfolio_payload = {
-        "account_id": "api_test_acc",
+        "account_id": "api_risk_endpoint_acc",
         "total_equity": 1000000.0,
         "positions": {"600519.SH": 100000.0}
     }
@@ -224,11 +224,11 @@ def test_fastapi_risk_router_endpoints(client):
     assert resp_pf.json()["drawdown"] == 0.0
 
     # 3. /api/v1/risk/circuit_breaker/status & reset
-    resp_cb = client.get("/api/v1/risk/circuit_breaker/status?account_id=api_test_acc")
+    resp_cb = client.get("/api/v1/risk/circuit_breaker/status?account_id=api_risk_endpoint_acc")
     assert resp_cb.status_code == 200
-    assert resp_cb.json()["account_id"] == "api_test_acc"
+    assert resp_cb.json()["account_id"] == "api_risk_endpoint_acc"
 
-    resp_reset = client.post("/api/v1/risk/circuit_breaker/reset", json={"account_id": "api_test_acc"})
+    resp_reset = client.post("/api/v1/risk/circuit_breaker/reset", json={"account_id": "api_risk_endpoint_acc"})
     assert resp_reset.status_code == 200
     assert resp_reset.json()["level"] == 0
 

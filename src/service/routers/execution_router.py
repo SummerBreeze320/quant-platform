@@ -99,3 +99,41 @@ def cancel_execution_task(task_id: str, runtime: ServiceRuntime = Depends(get_ru
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot cancel task {task_id} (not found or already terminal).")
     return {"status": "SUCCESS", "task_id": task_id, "message": "Task cancelled."}
+
+class MarkToMarketRequest(BaseModel):
+    symbol: str
+    price: float = Field(..., gt=0.0, description="标的最新市场价格")
+
+@router.post("/mark_to_market")
+def mark_to_market(req: MarkToMarketRequest, runtime: ServiceRuntime = Depends(get_runtime)):
+    with runtime.lock:
+        if not hasattr(runtime.broker, "update_market_price"):
+            raise HTTPException(status_code=400, detail="Current broker gateway does not support mark_to_market.")
+        updated_accounts = runtime.broker.update_market_price(req.symbol, req.price)
+        res = []
+        for acc in updated_accounts:
+            cb_state = runtime.circuit_breaker.update_equity(acc.account_id, acc.total_equity)
+            pos_info = acc.positions.get(req.symbol)
+            res.append({
+                "account_id": acc.account_id,
+                "total_equity": acc.total_equity,
+                "available_cash": acc.available_cash,
+                "circuit_breaker_level": cb_state.level.value,
+                "position": pos_info.model_dump() if pos_info else None,
+            })
+        return {"status": "SUCCESS", "symbol": req.symbol, "price": req.price, "updated_accounts": res}
+
+@router.get("/positions")
+def get_positions(
+    account_id: Optional[str] = Query(None, description="指定账户ID；缺省返回所有账户持仓"),
+    runtime: ServiceRuntime = Depends(get_runtime)
+):
+    with runtime.lock:
+        accounts = [runtime.broker.get_account(account_id)] if account_id else runtime.broker.get_all_accounts()
+        results = []
+        for acc in accounts:
+            for sym, pos in acc.positions.items():
+                p_dict = pos.model_dump()
+                p_dict["account_id"] = acc.account_id
+                results.append(p_dict)
+        return results

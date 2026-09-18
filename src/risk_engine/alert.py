@@ -77,9 +77,12 @@ class RiskAlertManager:
     def get_recent_alerts(
         self,
         limit: int = 50,
-        level: Optional[AlertLevel] = None
+        level: Optional[AlertLevel] = None,
+        account_id: Optional[str] = None,
     ) -> List[RiskAlertEvent]:
         events = list(self._history)
+        if account_id:
+            events = [e for e in events if e.account_id == account_id]
         if level:
             events = [e for e in events if e.level == level]
         return events[-limit:]

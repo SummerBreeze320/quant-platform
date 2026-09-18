@@ -30,6 +30,9 @@ class TradingPositionModel(Base, TimestampMixin):
     frozen_volume: Mapped[int] = mapped_column(Integer, default=0)
     avg_cost: Mapped[float] = mapped_column(Float, default=0.0)
     market_value: Mapped[float] = mapped_column(Float, default=0.0)
+    last_price: Mapped[float] = mapped_column(Float, default=0.0)
+    unrealized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
+
 
     account: Mapped["TradingAccountModel"] = relationship("TradingAccountModel", back_populates="positions")
 

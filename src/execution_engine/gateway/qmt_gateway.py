@@ -188,3 +188,14 @@ class QmtBrokerGateway(BaseBrokerGateway):
         except Exception as e:
             logger.warning(f"[QmtGateway] query account error: {e}; falling back to mock state.")
             return self._mock_broker.get_account(account_id)
+
+    def update_market_price(self, symbol: str, price: float) -> List[AccountState]:
+        """更新标的最新行情价格并重新估值持仓市值与浮动盈亏"""
+        # 统一由内部 broker 或 mock_broker 计算
+        return self._mock_broker.update_market_price(symbol, price)
+
+    def get_all_accounts(self) -> List[AccountState]:
+        """获取所有账户状态"""
+        if self.mock_mode or self._trader is None:
+            return self._mock_broker.get_all_accounts()
+        return [self.get_account(self.account_id)]
