@@ -13,6 +13,7 @@ from src.service.routers import (
     backtest_router,
     agent_router,
     optimizer_router,
+    risk_router,
 )
 
 settings = get_settings()
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(backtest_router, prefix="/api/v1")
     app.include_router(agent_router, prefix="/api/v1")
     app.include_router(optimizer_router, prefix="/api/v1")
+    app.include_router(risk_router, prefix="/api/v1")
 
     return app
 

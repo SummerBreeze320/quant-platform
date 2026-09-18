@@ -4,6 +4,7 @@ from src.service.routers.model_router import router as model_router
 from src.service.routers.backtest_router import router as backtest_router
 from src.service.routers.agent_router import router as agent_router
 from src.service.routers.optimizer_router import router as optimizer_router
+from src.service.routers.risk_router import router as risk_router
 
 __all__ = [
     "data_router",
@@ -12,4 +13,5 @@ __all__ = [
     "backtest_router",
     "agent_router",
     "optimizer_router",
+    "risk_router",
 ]
