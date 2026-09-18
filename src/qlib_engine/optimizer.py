@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any, List, Union
+import warnings
 import pandas as pd
 import numpy as np
 import cvxpy as cp
@@ -223,9 +224,16 @@ class ConvexOptimizer:
 
         prob = cp.Problem(cp.Minimize(obj_expr), constraints)
 
+        solver = getattr(cp, self.solver, cp.OSQP)
+        solver_opts = {}
+        if solver == cp.OSQP:
+            solver_opts = {"max_iter": 20000, "eps_abs": 1e-6, "eps_rel": 1e-6, "polishing": True}
+
         status = "failed"
         try:
-            prob.solve(solver=getattr(cp, self.solver, cp.OSQP), verbose=False)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="Solution may be inaccurate", category=UserWarning)
+                prob.solve(solver=solver, verbose=False, **solver_opts)
             status = prob.status
         except Exception as e:
             logger.warning(f"Convex optimizer primary solve failed with exception: {e}")
@@ -241,7 +249,9 @@ class ConvexOptimizer:
             ]
             relaxed_prob = cp.Problem(cp.Minimize(obj_expr), relaxed_constraints)
             try:
-                relaxed_prob.solve(solver=cp.OSQP, verbose=False)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", message="Solution may be inaccurate", category=UserWarning)
+                    relaxed_prob.solve(solver=cp.OSQP, verbose=False, **solver_opts)
                 status = "relaxed_optimal" if relaxed_prob.status in ["optimal", "optimal_inaccurate"] else "failed"
             except Exception as e:
                 logger.error(f"Relaxed solve also failed: {e}")

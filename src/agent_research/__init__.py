@@ -1,11 +1,6 @@
-from src.agent_research.hypothesis_agent import HypothesisAgent
-from src.agent_research.factor_coder_agent import FactorCoderAgent
-from src.agent_research.sandbox_evaluator import SandboxEvaluator
-from src.agent_research.evolution_loop import EvolutionLoop
+from src.agent_research.rdagent import is_rdagent_available, run_rdagent_factor_loop
 
 __all__ = [
-    "HypothesisAgent",
-    "FactorCoderAgent",
-    "SandboxEvaluator",
-    "EvolutionLoop",
+    "is_rdagent_available",
+    "run_rdagent_factor_loop",
 ]

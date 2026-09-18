@@ -32,3 +32,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # RD-Agent sandbox: Docker-in-Docker for isolated factor code execution.
+  # rdagent uses this container to run generated factor expressions safely.
+  # Requires: docker.sock mounted from host.
+  rdagent-sandbox:
+    image: docker:24-dind
+    container_name: rdagent_sandbox
+    restart: always
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../data/rdagent_workspace:/workspace
+    ports:
+      - "2376:2376"

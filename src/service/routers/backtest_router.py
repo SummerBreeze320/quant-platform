@@ -2,20 +2,103 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from src.common.db import get_db
+from src.common.logger import logger
 from src.models.backtest_record import BacktestRecord
+from src.models.model_registry import ModelRegistry
 from src.qlib_engine.backtest import BacktestEngine
 from src.qlib_engine.attribution import BrinsonAttribution
 from src.qlib_engine.factor_analysis import FactorQuantileAnalyzer
 from src.qlib_engine.report_generator import QuantReportGenerator
+from src.qlib_engine.data_handler import DataHandler, FEATURE_COLUMNS
+from src.qlib_engine.model_trainer import BaseModelTrainer
 from src.service.schemas.model_schema import BacktestRunRequest, BacktestResponse
 import pandas as pd
 import numpy as np
 
 router = APIRouter(prefix="/backtest", tags=["Portfolio Backtest"])
 
+_BACKTEST_START = "2026-08-01"
+_BACKTEST_END = "2026-08-31"
+_N_STOCKS = 50
+
+
+def _generate_synthetic_pred_df() -> pd.DataFrame:
+    """Generates deterministic synthetic prediction data for fallback backtesting."""
+    dates = pd.date_range(_BACKTEST_START, periods=20, freq="B").strftime("%Y-%m-%d").tolist()
+    symbols = [f"SZ{i:06d}" for i in range(_N_STOCKS)]
+    industries = (["Bank", "Tech", "Pharma", "Consumer", "Energy"] * 10)[:_N_STOCKS]
+    market_caps = [1e10 + i * 5e8 for i in range(_N_STOCKS)]
+    records = []
+    rng = np.random.RandomState(42)
+    for d in dates:
+        for s, ind, cap in zip(symbols, industries, market_caps):
+            records.append({
+                "date": d,
+                "symbol": s,
+                "score": float(rng.randn()),
+                "ret": float(rng.normal(0.0008, 0.015)),
+                "industry": ind,
+                "market_cap": cap
+            })
+    return pd.DataFrame(records)
+
+
+def _load_model_predictions(request: BacktestRunRequest, db: Session) -> pd.DataFrame:
+    """If model_id is provided, loads the model and generates predictions for the backtest period."""
+    if request.model_id is None:
+        return _generate_synthetic_pred_df()
+
+    model_entry = db.query(ModelRegistry).filter_by(id=request.model_id).first()
+    if not model_entry:
+        raise HTTPException(status_code=404, detail=f"Model id {request.model_id} not found.")
+
+    metrics = model_entry.metrics or {}
+    if metrics.get("status") != "TRAINED":
+        raise HTTPException(status_code=400, detail=f"Model '{model_entry.model_name}' is not trained (status: {metrics.get('status')}).")
+
+    try:
+        trainer = BaseModelTrainer.load(model_entry.model_path)
+        feature_names = trainer.feature_names
+
+        data_df = DataHandler.prepare_backtest_data(
+            feature_names=feature_names,
+            start_date=_BACKTEST_START,
+            end_date=_BACKTEST_END,
+            n_stocks=_N_STOCKS,
+        )
+
+        available_features = [c for c in feature_names if c in data_df.columns]
+        scores_by_date = {}
+        for d, group in data_df.groupby("date"):
+            X = group[available_features]
+            preds = trainer.predict(X)
+            scores_by_date[d] = dict(zip(group["symbol"].values, preds))
+
+        records = []
+        for d in sorted(data_df["date"].unique()):
+            day_df = data_df[data_df["date"] == d]
+            for _, row in day_df.iterrows():
+                records.append({
+                    "date": d,
+                    "symbol": row["symbol"],
+                    "score": float(scores_by_date[d].get(row["symbol"], 0.0)),
+                    "ret": float(row.get("ret", 0.0)),
+                    "industry": row.get("industry", "Unknown"),
+                    "market_cap": float(row.get("market_cap", 1e10)),
+                })
+        pred_df = pd.DataFrame(records)
+        logger.info(f"Backtest using model '{model_entry.model_name}' predictions for {len(pred_df)} records.")
+        return pred_df
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Model prediction for backtest failed, using synthetic: {e}")
+        return _generate_synthetic_pred_df()
+
+
 @router.post("/run", response_model=BacktestResponse)
 def run_backtest_simulation(request: BacktestRunRequest, db: Session = Depends(get_db)):
-    """Runs a simulated portfolio backtest given strategy parameters."""
+    """Runs a portfolio backtest using model predictions when model_id is provided."""
     engine = BacktestEngine(
         top_k=request.top_k,
         benchmark=request.benchmark,
@@ -32,32 +115,16 @@ def run_backtest_simulation(request: BacktestRunRequest, db: Session = Depends(g
         turnover_penalty=request.turnover_penalty
     )
 
-    # Generate benchmark simulation data
-    dates = pd.date_range("2026-08-01", periods=20, freq="B").strftime("%Y-%m-%d").tolist()
-    symbols = [f"SZ{i:06d}" for i in range(50)]
-    industries = ["Bank", "Tech", "Pharma", "Consumer", "Energy"] * 10
-    market_caps = [1e10 + i * 5e8 for i in range(50)]
-    records = []
-    np.random.seed(42)
-    for d in dates:
-        for s, ind, cap in zip(symbols, industries, market_caps):
-            records.append({
-                "date": d,
-                "symbol": s,
-                "score": float(np.random.randn()),
-                "ret": float(np.random.normal(0.0008, 0.015)),
-                "industry": ind,
-                "market_cap": cap
-            })
-    pred_df = pd.DataFrame(records)
+    pred_df = _load_model_predictions(request, db)
+    dates = sorted(pred_df["date"].unique())
 
     report = engine.run_backtest(pred_df)
 
     record = BacktestRecord(
         model_id=request.model_id,
         strategy_name=request.strategy_name,
-        start_date=dates[0],
-        end_date=dates[-1],
+        start_date=str(dates[0]),
+        end_date=str(dates[-1]),
         benchmark=request.benchmark,
         annualized_return=report["annualized_return"],
         sharpe_ratio=report["sharpe_ratio"],
@@ -81,7 +148,7 @@ def run_backtest_simulation(request: BacktestRunRequest, db: Session = Depends(g
 
 @router.post("/report/html", response_class=HTMLResponse)
 def generate_backtest_html_report(request: BacktestRunRequest, db: Session = Depends(get_db)):
-    """Runs simulation and returns a complete standalone HTML performance & Brinson attribution report."""
+    """Runs backtest and returns a complete standalone HTML performance & Brinson attribution report."""
     engine = BacktestEngine(
         top_k=request.top_k,
         benchmark=request.benchmark,
@@ -92,23 +159,8 @@ def generate_backtest_html_report(request: BacktestRunRequest, db: Session = Dep
         industry_neutral_allocation=request.industry_neutral_allocation
     )
 
-    dates = pd.date_range("2026-08-01", periods=20, freq="B").strftime("%Y-%m-%d").tolist()
-    symbols = [f"SZ{i:06d}" for i in range(50)]
-    industries = ["Bank", "Tech", "Pharma", "Consumer", "Energy"] * 10
-    market_caps = [1e10 + i * 5e8 for i in range(50)]
-    records = []
-    np.random.seed(42)
-    for d in dates:
-        for s, ind, cap in zip(symbols, industries, market_caps):
-            records.append({
-                "date": d,
-                "symbol": s,
-                "score": float(np.random.randn()),
-                "ret": float(np.random.normal(0.0008, 0.015)),
-                "industry": ind,
-                "market_cap": cap
-            })
-    pred_df = pd.DataFrame(records)
+    pred_df = _load_model_predictions(request, db)
+    dates = sorted(pred_df["date"].unique())
 
     report = engine.run_backtest(pred_df)
     report["strategy_name"] = request.strategy_name

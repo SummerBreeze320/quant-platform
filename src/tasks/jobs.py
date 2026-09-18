@@ -9,7 +9,9 @@ from src.models.sync_log import SyncLog
 from src.models.model_registry import ModelRegistry
 from src.data_pipeline.collector import WindDataCollector
 from src.data_pipeline.qlib_dumper import QlibDumper
-from src.agent_research.evolution_loop import EvolutionLoop
+from src.agent_research.rdagent import is_rdagent_available, run_rdagent_factor_loop
+from src.qlib_engine.data_handler import DataHandler
+from src.qlib_engine.model_trainer import BaseModelTrainer
 
 def job_daily_data_sync(trade_date: Optional[str] = None, db: Optional[Session] = None) -> Dict[str, Any]:
     """
@@ -99,14 +101,34 @@ def job_daily_model_predict(trade_date: Optional[str] = None, db: Optional[Sessi
             logger.info("No active model registered for daily prediction.")
             return {"status": "SKIPPED", "reason": "No active model"}
 
+        metrics = active_model.metrics or {}
+        if metrics.get("status") != "TRAINED":
+            logger.info(f"Active model '{active_model.model_name}' status is '{metrics.get('status')}', skipping prediction.")
+            return {"status": "SKIPPED", "reason": f"Model status: {metrics.get('status')}"}
+
         logger.info(f"Running daily prediction with model '{active_model.model_name}' for {target_date}...")
-        
-        # In mock / operational flow, cache score summary
+
+        trainer = BaseModelTrainer.load(active_model.model_path)
+        feature_names = trainer.feature_names
+
+        pred_df = DataHandler.prepare_prediction_data(feature_names, target_date)
+        X_pred = pred_df[[c for c in feature_names if c in pred_df.columns]]
+        scores = trainer.predict(X_pred)
+
+        pred_df["score"] = scores
+        pred_df = pred_df.sort_values("score", ascending=False).reset_index(drop=True)
+        pred_df["rank"] = range(1, len(pred_df) + 1)
+
         predictions = [
-            {"symbol": "SZ000001", "score": 0.85, "rank": 1},
-            {"symbol": "SH600000", "score": 0.78, "rank": 2},
+            {"symbol": row["symbol"], "score": round(float(row["score"]), 6), "rank": int(row["rank"])}
+            for _, row in pred_df.iterrows()
         ]
-        redis_client.set_json(f"predictions:{target_date}", predictions, ex=86400 * 3)
+
+        payload = {"date": target_date, "model_name": active_model.model_name, "predictions": predictions}
+        redis_client.set_json(f"predictions:{target_date}", payload, ex=86400 * 3)
+        redis_client.set_json("predictions:latest", payload, ex=86400 * 3)
+
+        logger.info(f"Daily prediction complete: {len(predictions)} symbols cached for {target_date}.")
         return {"status": "SUCCESS", "date": target_date, "predictions_count": len(predictions)}
     except Exception as e:
         logger.error(f"Daily prediction failed: {e}")
@@ -117,15 +139,18 @@ def job_daily_model_predict(trade_date: Optional[str] = None, db: Optional[Sessi
 
 def job_weekend_factor_mining(theme: str = "reversal", rounds: int = 3, db: Optional[Session] = None) -> Dict[str, Any]:
     """
-    Weekend offline automated factor research using RD-Agent:
-    Executes multiple rounds of hypothesis generation, coding, and backtesting.
+    Weekend offline automated factor research using Microsoft RD-Agent:
+    Executes multiple rounds of LLM-driven hypothesis generation, Co-STEER coding, and sandbox evaluation.
     """
     sess = db or SessionLocal()
     should_close = db is None
     try:
+        if not is_rdagent_available():
+            logger.warning("RD-Agent not available (LLM API key not configured). Skipping factor mining.")
+            return {"status": "SKIPPED", "reason": "LLM API key not configured"}
+
         logger.info(f"Starting weekend RD-Agent factor mining loop (rounds={rounds}, theme={theme})...")
-        loop = EvolutionLoop(db_session=sess)
-        results = loop.run_multi_rounds(rounds=rounds, theme=theme)
+        results = run_rdagent_factor_loop(rounds=rounds, theme=theme, db=sess)
         passed_count = sum(1 for r in results if r.get("success"))
         logger.info(f"Weekend factor mining complete: {passed_count}/{rounds} factors passed quality gate.")
         return {"status": "SUCCESS", "rounds": rounds, "passed_count": passed_count, "results": results}

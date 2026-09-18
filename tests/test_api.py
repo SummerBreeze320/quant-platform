@@ -74,8 +74,9 @@ def test_rd_agent_explore_api(client_with_db):
         "rounds": 1
     }
     resp = client_with_db.post("/api/v1/rd-agent/tasks", json=payload)
-    assert resp.status_code == 200
-    assert "rounds" in resp.json()
+    # Without LLM API key configured, rdagent is unavailable → 503
+    assert resp.status_code == 503
+    assert "LLM API key" in resp.json()["detail"]
 
 def test_model_api_lifecycle(client_with_db):
     # 1. LightGBM model

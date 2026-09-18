@@ -14,6 +14,9 @@ build/
 data/postgres_data/
 data/redis_data/
 data/temp/
+data/models/*.pkl
+data/qlib_data/
 logs/
 .idea/
 .vscode/
+

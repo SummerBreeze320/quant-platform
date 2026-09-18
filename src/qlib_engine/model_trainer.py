@@ -111,9 +111,10 @@ class LightGBMTrainer(BaseModelTrainer):
             n_estimators=n_estimators,
             **self.params
         )
-        eval_set = [(X_valid, y_valid)] if X_valid is not None and y_valid is not None else None
+        eval_X = X_valid if X_valid is not None and y_valid is not None else None
+        eval_y = y_valid if X_valid is not None and y_valid is not None else None
         logger.info(f"Fitting LightGBM on {X_train.shape[0]} samples with {X_train.shape[1]} features...")
-        self.model.fit(X_train, y_train, eval_set=eval_set)
+        self.model.fit(X_train, y_train, eval_X=eval_X, eval_y=eval_y)
         logger.info("LightGBM training completed.")
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
