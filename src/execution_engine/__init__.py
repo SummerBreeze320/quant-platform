@@ -22,6 +22,11 @@ from src.execution_engine.gateway import (
     QmtBrokerGateway,
 )
 from src.execution_engine.coordinator import ExecutionCoordinator
+from src.execution_engine.scheduler import (
+    TimeSlicedScheduler,
+    SlicedExecutionTask,
+    ExecutionTaskStatus,
+)
 
 __all__ = [
     "OrderDirection",
@@ -42,4 +47,8 @@ __all__ = [
     "PaperBroker",
     "QmtBrokerGateway",
     "ExecutionCoordinator",
+    "TimeSlicedScheduler",
+    "SlicedExecutionTask",
+    "ExecutionTaskStatus",
 ]
+

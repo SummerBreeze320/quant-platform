@@ -12,7 +12,7 @@ from src.risk_engine.circuit_breaker import CircuitBreakerManager
 from src.risk_engine.post_trade import PostTradeRiskMonitor
 from src.risk_engine.pre_trade import PreTradeRiskChecker
 from src.service.market_runtime import MarketRuntime
-
+from src.execution_engine.scheduler import TimeSlicedScheduler
 
 from typing import Optional, Callable
 from src.common.db import SessionLocal
@@ -50,9 +50,13 @@ class ServiceRuntime:
         self.risk_monitor = PostTradeRiskMonitor(
             cb_manager=self.circuit_breaker, alert_manager=self.alert_manager,
         )
+        self.scheduler = TimeSlicedScheduler()
+
         self.coordinator = ExecutionCoordinator(
-            gateway=self.broker, risk_checker=self.risk_checker,
+            gateway=self.broker,
+            risk_checker=self.risk_checker,
             circuit_breaker=self.circuit_breaker,
+            scheduler=self.scheduler,
         )
         self.pms_manager = PortfolioManager(
             broker=self.broker, circuit_breaker=self.circuit_breaker, storage=self.storage
