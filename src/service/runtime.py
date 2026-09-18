@@ -85,6 +85,12 @@ class ServiceRuntime:
                 )
             return self._market
 
+    def shutdown(self) -> None:
+        """安全释放系统运行时与后台线程"""
+        with self.lock:
+            if self._market is not None:
+                self._market.shutdown()
+
 
 def get_runtime(request: Request) -> ServiceRuntime:
     return request.app.state.runtime

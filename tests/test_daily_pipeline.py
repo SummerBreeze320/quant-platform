@@ -121,6 +121,8 @@ def test_scheduler_jobs_registration():
     job_ids = [j.id for j in scheduler.get_jobs()]
 
     assert "premarket_rebalance" in job_ids
+    assert "start_market_feed" in job_ids
+    assert "stop_market_feed" in job_ids
     assert "daily_settlement" in job_ids
     assert "daily_data_sync" in job_ids
     assert "daily_model_predict" in job_ids

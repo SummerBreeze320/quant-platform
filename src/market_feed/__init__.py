@@ -15,6 +15,14 @@ from src.market_feed.indicators import (
 from src.market_feed.signal_engine import SignalEngine, CooldownManager
 from src.market_feed.router import SignalRouter
 
+from src.market_feed.live_feed import (
+    LiveFeedManager,
+    BaseFeedAdapter,
+    SimulationLiveFeedAdapter,
+    PublicWebLiveFeedAdapter,
+    QmtLiveFeedAdapter,
+)
+
 __all__ = [
     "SignalDirection",
     "MarketTick",
@@ -29,4 +37,9 @@ __all__ = [
     "SignalEngine",
     "CooldownManager",
     "SignalRouter",
+    "LiveFeedManager",
+    "BaseFeedAdapter",
+    "SimulationLiveFeedAdapter",
+    "PublicWebLiveFeedAdapter",
+    "QmtLiveFeedAdapter",
 ]

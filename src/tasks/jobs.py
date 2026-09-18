@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from src.common.db import SessionLocal
 from src.common.redis_client import get_redis
@@ -210,3 +210,38 @@ def job_daily_settlement(
         trade_date=trade_date,
         runtime=runtime,
     )
+
+
+def job_start_market_feed(
+    source: str = "PUBLIC",
+    symbols: Optional[List[str]] = None,
+    runtime: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    09:25 开盘前启动盘中行情流驱动器
+    """
+    if runtime is None:
+        try:
+            from src.service.app import app
+            runtime = getattr(app.state, "runtime", None)
+        except Exception:
+            runtime = None
+    if runtime and hasattr(runtime, "market"):
+        syms = symbols or ["600000.SH", "000001.SZ", "600036.SH", "000858.SZ", "601318.SH"]
+        return runtime.market.live_feed.start(source=source, symbols=syms)
+    return {"status": "SKIPPED", "detail": "Runtime or market not initialized"}
+
+
+def job_stop_market_feed(runtime: Optional[Any] = None) -> Dict[str, Any]:
+    """
+    15:05 收盘后停止盘中行情流驱动器以节省资源
+    """
+    if runtime is None:
+        try:
+            from src.service.app import app
+            runtime = getattr(app.state, "runtime", None)
+        except Exception:
+            runtime = None
+    if runtime and hasattr(runtime, "market"):
+        return runtime.market.live_feed.stop()
+    return {"status": "SKIPPED", "detail": "Runtime or market not initialized"}

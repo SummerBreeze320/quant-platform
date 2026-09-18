@@ -51,6 +51,8 @@ from src.risk_engine.alert import RiskAlertManager
 from src.risk_engine.models import CircuitBreakerLevel, AlertLevel
 from typing import Optional
 
+from src.market_feed.live_feed import LiveFeedManager
+
 class MarketRuntime:
     def __init__(
         self,
@@ -71,6 +73,12 @@ class MarketRuntime:
         self.bus = StreamBus(stream_key="market_stream:ticks")
         self.bus.subscribe(self.on_tick)
         self.replay_engine = TickReplayEngine(stream_bus=self.bus)
+        self.live_feed = LiveFeedManager(bus=self.bus)
+
+    def shutdown(self) -> None:
+        """安全停止行情源驱动与后台线程"""
+        if hasattr(self, "live_feed") and self.live_feed:
+            self.live_feed.stop()
 
     def on_tick(self, tick: MarketTick):
         with self.lock:

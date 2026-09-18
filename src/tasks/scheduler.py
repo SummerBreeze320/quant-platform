@@ -7,6 +7,8 @@ from src.tasks.jobs import (
     job_weekend_factor_mining,
     job_premarket_rebalance,
     job_daily_settlement,
+    job_start_market_feed,
+    job_stop_market_feed,
 )
 from src.common.logger import logger
 
@@ -31,7 +33,25 @@ class QuantScheduler:
             replace_existing=True
         )
 
-        # 2. 15:30 Mon-Fri: Post-market day-end settlement & T+1 share unfreezing
+        # 2. 09:25 Mon-Fri: Start live market feed stream
+        self.scheduler.add_job(
+            job_start_market_feed,
+            trigger=CronTrigger(day_of_week="mon-fri", hour=9, minute=25),
+            id="start_market_feed",
+            name="Start Live Market Feed Driver",
+            replace_existing=True
+        )
+
+        # 3. 15:05 Mon-Fri: Stop live market feed stream
+        self.scheduler.add_job(
+            job_stop_market_feed,
+            trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=5),
+            id="stop_market_feed",
+            name="Stop Live Market Feed Driver",
+            replace_existing=True
+        )
+
+        # 4. 15:30 Mon-Fri: Post-market day-end settlement & T+1 share unfreezing
         self.scheduler.add_job(
             job_daily_settlement,
             trigger=CronTrigger(day_of_week="mon-fri", hour=15, minute=30),
@@ -40,7 +60,7 @@ class QuantScheduler:
             replace_existing=True
         )
 
-        # 3. 16:30 Mon-Fri: Post-market daily data sync
+        # 5. 16:30 Mon-Fri: Post-market daily data sync
         self.scheduler.add_job(
             job_daily_data_sync,
             trigger=CronTrigger(day_of_week="mon-fri", hour=16, minute=30),
@@ -49,7 +69,7 @@ class QuantScheduler:
             replace_existing=True
         )
 
-        # 4. 17:15 Mon-Fri: Daily model prediction & score caching
+        # 6. 17:15 Mon-Fri: Daily model prediction & score caching
         self.scheduler.add_job(
             job_daily_model_predict,
             trigger=CronTrigger(day_of_week="mon-fri", hour=17, minute=15),
@@ -58,7 +78,7 @@ class QuantScheduler:
             replace_existing=True
         )
 
-        # 5. 10:00 Sunday: Weekend RD-Agent factor mining loop
+        # 7. 10:00 Sunday: Weekend RD-Agent factor mining loop
         self.scheduler.add_job(
             job_weekend_factor_mining,
             trigger=CronTrigger(day_of_week="sun", hour=10, minute=0),
