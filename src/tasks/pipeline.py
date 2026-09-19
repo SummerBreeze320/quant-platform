@@ -169,12 +169,13 @@ class DailySettlementPipeline:
                 # 1. 触发 Broker T+1 股份解冻
                 runtime.broker.settle_overnight(account_id=account_id)
 
-                # 2. 同步 PMS 账户组合层
+                # 2. 同步 PMS 账户组合层并记录日终净值快照
                 runtime.pms_manager.sync_from_broker()
-
                 if account_id:
+                    runtime.pms_manager.record_daily_nav(account_id, date=target_date)
                     settled_accounts.append(account_id)
                 else:
+                    runtime.pms_manager.record_all_daily_nav(date=target_date)
                     settled_accounts = list(runtime.broker.accounts.keys())
 
         logger.info(f"[DailySettlement] Completed settlement for {len(settled_accounts)} accounts.")

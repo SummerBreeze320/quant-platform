@@ -50,6 +50,8 @@ class ConsolidatedPosition(BaseModel):
     symbol: str
     total_volume: int = 0
     total_market_value: float = 0.0
+    total_cost: float = 0.0
+    unrealized_pnl: float = 0.0
     weight_in_master: float = 0.0
     contributing_strategies: List[str] = Field(default_factory=list)
 
@@ -73,3 +75,13 @@ class StrategyPerformance(BaseModel):
     current_equity: float
     cumulative_return: float
     contribution_to_master: float
+
+class DailyNavRecord(BaseModel):
+    """逐日单位净值与收益率快照"""
+    date: str
+    account_id: str
+    equity: float
+    nav: float = 1.0
+    daily_return: float = 0.0
+    benchmark_return: float = 0.0
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())

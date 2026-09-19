@@ -41,6 +41,8 @@ class PortfolioAggregator:
                 cpos = consolidated_pos[sym]
                 cpos.total_volume += pos.total_volume
                 cpos.total_market_value += pos.market_value
+                cpos.total_cost += round(getattr(pos, "avg_cost", 0.0) * pos.total_volume, 2)
+                cpos.unrealized_pnl += round(getattr(pos, "unrealized_pnl", 0.0), 2)
                 if sid not in cpos.contributing_strategies:
                     cpos.contributing_strategies.append(sid)
 

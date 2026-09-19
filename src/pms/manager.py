@@ -8,8 +8,11 @@ from src.pms.models import (
     CashTransfer,
     CapitalAllocationPlan,
     StrategyPerformance,
+    DailyNavRecord,
 )
 from src.pms.allocator import CapitalAllocator
+from src.pms.risk_analytics import RiskAnalyticsEngine, RiskMetricsSummary
+from src.pms.attribution_adapter import PmsBrinsonAdapter
 from src.execution_engine.gateway.paper_broker import PaperBroker
 from src.risk_engine.circuit_breaker import CircuitBreakerManager
 
@@ -34,6 +37,7 @@ class PortfolioManager:
         self.allocator = allocator or CapitalAllocator()
         self.circuit_breaker = circuit_breaker
         self.storage = storage
+        self._nav_history: Dict[str, List[DailyNavRecord]] = {}
 
 
     def deposit_to_master(self, amount: float) -> float:
@@ -209,3 +213,136 @@ class PortfolioManager:
             )
 
         return summaries
+
+    def record_daily_nav(
+        self,
+        account_id: str,
+        date: str,
+        equity: Optional[float] = None,
+        benchmark_return: float = 0.0,
+    ) -> DailyNavRecord:
+        """记录指定账户（策略或 master）的当日单位净值快照"""
+        if account_id == "master":
+            curr_eq = equity if equity is not None else self.refresh_total_equity()
+        elif account_id in self.master.strategies:
+            self.sync_from_broker()
+            curr_eq = equity if equity is not None else self.master.strategies[account_id].total_equity
+        else:
+            if self.broker and account_id in self.broker.accounts:
+                curr_eq = equity if equity is not None else self.broker.accounts[account_id].total_equity
+            else:
+                curr_eq = equity if equity is not None else 0.0
+
+        if account_id not in self._nav_history:
+            self._nav_history[account_id] = []
+
+        history = self._nav_history[account_id]
+        if not history:
+            nav = 1.0
+            daily_ret = 0.0
+        else:
+            prev = history[-1]
+            daily_ret = round((curr_eq - prev.equity) / prev.equity, 6) if prev.equity > 0 else 0.0
+            nav = round(prev.nav * (1.0 + daily_ret), 4)
+
+        rec = DailyNavRecord(
+            date=date,
+            account_id=account_id,
+            equity=round(curr_eq, 2),
+            nav=nav,
+            daily_return=round(daily_ret, 6),
+            benchmark_return=round(benchmark_return, 6),
+        )
+        history.append(rec)
+        return rec
+
+    def record_all_daily_nav(self, date: str, benchmark_return: float = 0.0) -> Dict[str, DailyNavRecord]:
+        """批量留存母账户及所有激活子策略的当日净值快照"""
+        self.sync_from_broker()
+        results: Dict[str, DailyNavRecord] = {}
+        # 1. 记录 master
+        results["master"] = self.record_daily_nav("master", date=date, benchmark_return=benchmark_return)
+        # 2. 记录各策略
+        for sid, strat in self.master.strategies.items():
+            if strat.is_active:
+                results[sid] = self.record_daily_nav(sid, date=date, benchmark_return=benchmark_return)
+        return results
+
+    def get_nav_history(self, account_id: str) -> List[DailyNavRecord]:
+        """获取指定账户历史净值序列"""
+        return self._nav_history.get(account_id, [])
+
+    def get_risk_analytics(
+        self,
+        account_id: str,
+        risk_free_rate: float = 0.02,
+    ) -> RiskMetricsSummary:
+        """获取指定策略或母账户的多维量化风险指标 (Sharpe, Sortino, MaxDD, Calmar, Alpha, Beta)"""
+        history = self.get_nav_history(account_id)
+        if len(history) >= 2:
+            rets = [r.daily_return for r in history[1:]]
+            b_rets = [r.benchmark_return for r in history[1:]]
+            return RiskAnalyticsEngine.calculate_metrics(
+                returns=rets,
+                benchmark_returns=b_rets if any(b != 0 for b in b_rets) else None,
+                risk_free_rate=risk_free_rate,
+            )
+
+        # 若历史净值点不足 2 个，利用当前累计收益与基础估值合成单点概览
+        self.sync_from_broker()
+        if account_id == "master":
+            eq = self.master.total_equity
+            budget = self.master.reserve_cash + sum(s.allocated_budget for s in self.master.strategies.values())
+        elif account_id in self.master.strategies:
+            strat = self.master.strategies[account_id]
+            eq = strat.total_equity
+            budget = strat.allocated_budget if strat.allocated_budget > 0 else eq
+        else:
+            eq = 0.0
+            budget = 1.0
+
+        cum_ret = (eq - budget) / budget if budget > 0 else 0.0
+        return RiskMetricsSummary(
+            total_return=round(cum_ret, 4),
+            annualized_return=round(cum_ret, 4),
+            annualized_volatility=0.0,
+            max_drawdown=0.0,
+            max_drawdown_duration=0,
+            sharpe_ratio=0.0,
+            sortino_ratio=0.0,
+            calmar_ratio=0.0,
+            win_rate=1.0 if cum_ret > 0 else 0.0,
+            profit_loss_ratio=99.0 if cum_ret > 0 else 0.0,
+            trading_days=len(history),
+        )
+
+    def get_monthly_returns_matrix(self, account_id: str) -> Dict[str, Any]:
+        """获取指定账户的月度收益矩阵与年度汇总"""
+        history = self.get_nav_history(account_id)
+        records = [{"date": r.date, "return": r.daily_return} for r in history]
+        return RiskAnalyticsEngine.generate_monthly_matrix(records)
+
+    def get_brinson_attribution(
+        self,
+        strategy_id: Optional[str] = None,
+        benchmark_weights: Optional[Dict[str, float]] = None,
+        benchmark_returns: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Any]:
+        """对子策略或全组合进行 Brinson-Fachler 行业绩效归因"""
+        self.sync_from_broker()
+        if strategy_id and strategy_id in self.master.strategies:
+            strat = self.master.strategies[strategy_id]
+            return PmsBrinsonAdapter.attribute_strategy(
+                strategy=strat,
+                benchmark_weights=benchmark_weights,
+                benchmark_returns=benchmark_returns,
+            )
+
+        # 默认对穿透合并后的投资组合进行全量归因
+        from src.pms.aggregator import PortfolioAggregator
+        consolidated = PortfolioAggregator().aggregate(self.master)
+        return PmsBrinsonAdapter.attribute_consolidated(
+            consolidated=consolidated,
+            benchmark_weights=benchmark_weights,
+            benchmark_returns=benchmark_returns,
+        )
