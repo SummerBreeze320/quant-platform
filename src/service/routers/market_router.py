@@ -83,6 +83,23 @@ def get_recent_signals(limit: int = Query(50, ge=1, le=200), runtime: ServiceRun
     with runtime.lock:
         return runtime.market.signal_router.get_recent_signals(limit=limit)
 
+@router.get("/strategies")
+def get_strategy_states(runtime: ServiceRuntime = Depends(get_runtime)):
+    """获取所有已注册日内高频策略的状态（网格水位、动量布林带、挂单等）"""
+    with runtime.lock:
+        states = runtime.market.strategy_coordinator.get_strategy_states()
+        return {"status": "SUCCESS", "strategies": states}
+
+@router.post("/strategies/{strategy_id}/reset")
+def reset_strategy(strategy_id: str, runtime: ServiceRuntime = Depends(get_runtime)):
+    """重置指定日内策略状态"""
+    with runtime.lock:
+        strat = runtime.market.strategy_coordinator.strategies.get(strategy_id)
+        if not strat:
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        strat.reset()
+        return {"status": "SUCCESS", "strategy_id": strategy_id, "state": strat.get_state()}
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     runtime = websocket.app.state.runtime

@@ -21,7 +21,8 @@ class RedisClient:
                 db=settings.REDIS_DB,
                 password=settings.REDIS_PASSWORD,
                 decode_responses=True,
-                socket_timeout=5
+                socket_timeout=2.0,
+                socket_connect_timeout=0.5,
             )
         return self._client
 

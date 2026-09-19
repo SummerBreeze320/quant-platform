@@ -115,9 +115,12 @@ class IntradayMomentumBreakoutStrategy(BaseRealtimeStrategy):
             "peak_price": self.peak_price,
             "position_volume": self.position_volume,
             "total_trades": self.total_trades,
-            "vwap": self.vwap.current_vwap,
-            "bollinger_pct_b": self.bollinger.current_pct_b,
-            "ofi": self.ofi.current_ofi,
+            "vwap": getattr(self.vwap, "current_vwap", 0.0),
+            "upper_band": getattr(self.bollinger, "current_upper", 0.0),
+            "mid_band": getattr(self.bollinger, "current_mid", 0.0),
+            "lower_band": getattr(self.bollinger, "current_lower", 0.0),
+            "bollinger_pct_b": getattr(self.bollinger, "current_pct_b", 0.5),
+            "ofi": getattr(self.ofi, "current_ofi", 0.0),
         }
 
     def reset(self) -> None:

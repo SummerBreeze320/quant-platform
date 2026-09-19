@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantCopilot - 量化投资与智能交易终端</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部导航栏与全局系统状态 -->
+        <header class="top-nav">
+            <div class="brand-section">
+                <div class="brand-logo">
+                    <svg class="icon-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                    <span class="brand-name">QuantCopilot</span>
+                </div>
+                <span class="badge-terminal">QUANT CONSOLE v2.5</span>
+            </div>
+
+            <!-- 系统运行状态监控卡片组 -->
+            <div class="system-status-bar">
+                <div class="status-item" id="brokerStatusBox">
+                    <span class="status-dot status-green" id="brokerDot"></span>
+                    <span class="status-label">交易柜台:</span>
+                    <span class="status-value" id="brokerStatusText">PAPER BROKER (NORMAL)</span>
+                </div>
+                <div class="status-item" id="feedStatusBox">
+                    <span class="status-dot status-cyan" id="feedDot"></span>
+                    <span class="status-label">行情引擎:</span>
+                    <span class="status-value" id="feedStatusText">IDLE</span>
+                </div>
+                <div class="status-item" id="circuitStatusBox">
+                    <span class="status-dot status-green" id="circuitDot"></span>
+                    <span class="status-label">风控熔断:</span>
+                    <span class="status-value" id="circuitStatusText">NORMAL (0.0% DD)</span>
+                </div>
+                <div class="status-item" id="wsStatusBox">
+                    <span class="status-dot status-gray" id="wsDot"></span>
+                    <span class="status-label">实时通信:</span>
+                    <span class="status-value" id="wsStatusText">CONNECTING...</span>
+                </div>
+            </div>
+
+            <!-- 右侧操作区 -->
+            <div class="nav-actions">
+                <button class="btn btn-outline" id="btnToggleFeed">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span id="btnFeedText">启动行情流仿真</span>
+                </button>
+                <button class="btn btn-primary" id="btnGlobalRefresh">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span>同步刷新</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 顶部核心资产指标概览条 -->
+        <section class="kpi-banner">
+            <div class="kpi-card">
+                <div class="kpi-title">母账户总资产 (Total Equity)</div>
+                <div class="kpi-value text-glow" id="kpiTotalEquity">¥ 100,000,000.00</div>
+                <div class="kpi-sub">
+                    <span>可用资金: </span>
+                    <span class="mono-num" id="kpiAvailCash">¥ 100,000,000.00</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">浮动盈亏 (Unrealized PnL)</div>
+                <div class="kpi-value text-green" id="kpiUnrealizedPnl">+¥ 0.00</div>
+                <div class="kpi-sub">
+                    <span>持仓市值: </span>
+                    <span class="mono-num" id="kpiMarketValue">¥ 0.00</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">年化夏普比率 (Sharpe Ratio)</div>
+                <div class="kpi-value text-cyan" id="kpiSharpe">1.85</div>
+                <div class="kpi-sub">
+                    <span>索提诺比率: </span>
+                    <span class="mono-num" id="kpiSortino">2.42</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">历史最大回撤 (Max Drawdown)</div>
+                <div class="kpi-value text-red" id="kpiMaxDrawdown">-3.15%</div>
+                <div class="kpi-sub">
+                    <span>卡玛比率 (Calmar): </span>
+                    <span class="mono-num" id="kpiCalmar">4.12</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">超额收益 (Alpha / Beta)</div>
+                <div class="kpi-value text-purple" id="kpiAlphaBeta">α +12.4% / β 0.68</div>
+                <div class="kpi-sub">
+                    <span>胜率 / 盈亏比: </span>
+                    <span class="mono-num" id="kpiWinRate">62.5% / 2.10</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 标签页导航栏 -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="tab-pms" id="btnTabPms">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <span>PMS 风险与绩效归因</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-strategies" id="btnTabStrategies">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span>日内实时策略与行情</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-execution" id="btnTabExecution">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>高阶执行与切片调度</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-factor" id="btnTabFactor">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                <span>LLM 因子投研流水线</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-rl" id="btnTabRl">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                <span>强化学习调仓看板</span>
+            </button>
+        </nav>
+
+        <!-- 主内容工作区 -->
+        <main class="main-content">
+            <!-- TAB 1: PMS 组合与绩效归因 -->
+            <div class="tab-pane active" id="tab-pms">
+                <div class="grid-2-col">
+                    <!-- 净值走势与水下回撤图 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">NAV & DRAWDOWN</span>
+                                组合历史净值走势与动态水下回撤
+                            </div>
+                            <div class="panel-controls">
+                                <span class="badge-tag">策略: Consolidated Master</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-container" id="navChartContainer">
+                                <canvas id="navCanvas" width="700" height="260"></canvas>
+                            </div>
+                            <div class="chart-legend">
+                                <div class="legend-item"><span class="legend-color color-cyan"></span> 组合净值 (Portfolio NAV)</div>
+                                <div class="legend-item"><span class="legend-color color-gray"></span> 沪深300基准 (Benchmark)</div>
+                                <div class="legend-item"><span class="legend-color color-red"></span> 水下回撤 (Drawdown %)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 月度收益率热力图矩阵 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">SEASONALITY</span>
+                                月度收益率热力图矩阵 (Monthly Returns)
+                            </div>
+                            <div class="panel-controls">
+                                <span class="badge-tag">单位: %</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="heatmap-wrapper" id="monthlyHeatmap">
+                                <!-- 动态生成的月度热力表格 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-2-col" style="margin-top: 16px;">
+                    <!-- Brinson 行业绩效归因 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">BRINSON ATTRIBUTION</span>
+                                Brinson-Fachler 行业绩效超额归因分解
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-container" id="brinsonChartContainer">
+                                <canvas id="brinsonCanvas" width="700" height="220"></canvas>
+                            </div>
+                            <div class="chart-legend">
+                                <div class="legend-item"><span class="legend-color color-emerald"></span> 配置效应 (Allocation)</div>
+                                <div class="legend-item"><span class="legend-color color-blue"></span> 选股效应 (Selection)</div>
+                                <div class="legend-item"><span class="legend-color color-amber"></span> 交互效应 (Interaction)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 穿透持仓清单透视 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">POSITIONS</span>
+                                组合多策略穿透持仓透视
+                            </div>
+                            <div class="panel-controls">
+                                <span id="posCountBadge" class="badge-tag">0 只标的</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="table-responsive">
+                                <table class="data-table" id="tablePositions">
+                                    <thead>
+                                        <tr>
+                                            <th>标的代码</th>
+                                            <th>持仓数量</th>
+                                            <th>持仓权重</th>
+                                            <th>持仓均价</th>
+                                            <th>最新市价</th>
+                                            <th>浮动盈亏</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyPositions">
+                                        <tr><td colspan="6" class="text-center text-muted">暂无穿透持仓</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: 日内实时策略与行情 -->
+            <div class="tab-pane" id="tab-strategies">
+                <div class="grid-2-col">
+                    <!-- 动态网格策略监控面板 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-cyan">DYNAMIC GRID</span>
+                                510300.SH 动态自适应网格水位
+                            </div>
+                            <div class="panel-controls">
+                                <span class="badge-tag status-active" id="gridStatusBadge">ACTIVE</span>
+                                <button class="btn btn-xs btn-outline" id="btnResetGrid">重置网格</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="grid-metrics-row">
+                                <div class="metric-pill">
+                                    <span class="lbl">基准中枢价:</span>
+                                    <span class="val mono-num" id="gridBasePrice">3.500</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">最新价格:</span>
+                                    <span class="val mono-num text-cyan" id="gridLastPrice">3.500</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">网格步长:</span>
+                                    <span class="val mono-num">0.50%</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">单格手数量:</span>
+                                    <span class="val mono-num">1,000 股</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">已成交配对:</span>
+                                    <span class="val mono-num text-green" id="gridTradesCount">0 次</span>
+                                </div>
+                            </div>
+                            <!-- 网格水位视觉刻度条 -->
+                            <div class="grid-visualizer-box">
+                                <div class="visualizer-header">
+                                    <span>卖单压力挂档 (Sell Grids)</span>
+                                    <span id="gridTopBand">+2.50% (3.588)</span>
+                                </div>
+                                <div class="ladder-container" id="gridLadder">
+                                    <!-- 动态渲染网格阶梯 -->
+                                </div>
+                                <div class="visualizer-footer">
+                                    <span>买单承接挂档 (Buy Grids)</span>
+                                    <span id="gridBottomBand">-2.50% (3.413)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 微观动量突破策略监控面板 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-purple">MOMENTUM BREAKOUT</span>
+                                510500.SH 微观订单流 (OFI) 动量突破
+                            </div>
+                            <div class="panel-controls">
+                                <span class="badge-tag status-active" id="momStatusBadge">ACTIVE</span>
+                                <button class="btn btn-xs btn-outline" id="btnResetMom">重置策略</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="grid-metrics-row">
+                                <div class="metric-pill">
+                                    <span class="lbl">当前持仓:</span>
+                                    <span class="val mono-num text-yellow" id="momPosition">FLAT (0)</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">布林上轨:</span>
+                                    <span class="val mono-num text-red" id="momUpper">--</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">布林中轨:</span>
+                                    <span class="val mono-num" id="momMid">--</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">布林下轨:</span>
+                                    <span class="val mono-num text-green" id="momLower">--</span>
+                                </div>
+                                <div class="metric-pill">
+                                    <span class="lbl">累积 OFI 指标:</span>
+                                    <span class="val mono-num text-cyan" id="momOfi">0.00</span>
+                                </div>
+                            </div>
+                            <!-- OFI 动量计与追踪止损走势 -->
+                            <div class="ofi-gauge-box">
+                                <div class="ofi-gauge-label">
+                                    <span>多空订单流不平衡量 (OFI Ratio)</span>
+                                    <span id="ofiRatioText">0.00 σ</span>
+                                </div>
+                                <div class="ofi-bar-wrapper">
+                                    <div class="ofi-bar-center"></div>
+                                    <div class="ofi-bar-fill" id="ofiBarFill"></div>
+                                </div>
+                                <div class="ofi-thresholds">
+                                    <span>空头超跌阈值 (-1.5σ)</span>
+                                    <span>均衡 (0)</span>
+                                    <span>多头突破阈值 (+1.5σ)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 实时行情 Tick 瀑布流与策略信号日志 -->
+                <div class="grid-2-col" style="margin-top: 16px;">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">TICK STREAM</span>
+                                实时行情 Tick 瀑布流 (WebSocket)
+                            </div>
+                            <div class="panel-controls">
+                                <span class="badge-tag" id="tickCountBadge">0 Ticks</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="log-stream-box" id="tickStreamBox">
+                                <div class="log-item text-muted">等待行情 Tick 流启动...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-green">TRADING SIGNALS</span>
+                                策略触发买卖信号与路由柜台日志
+                            </div>
+                            <div class="panel-controls">
+                                <span class="badge-tag" id="signalCountBadge">0 信号</span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="log-stream-box" id="signalStreamBox">
+                                <div class="log-item text-muted">暂无交易触发信号</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: 高阶执行与切片调度 -->
+            <div class="tab-pane" id="tab-execution">
+                <div class="grid-3-col">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-cyan">ICEBERG ALGO</span>
+                                冰山算法委托监控 (Iceberg)
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <p class="panel-desc">随机浮动隐蔽显露量，自动整百股规整，有效防范微观跟单探测。</p>
+                            <div class="algo-stats-box">
+                                <div class="algo-stat-line">
+                                    <span>显露比例 (Display):</span>
+                                    <span class="mono-num">10% - 20% (随机浮动)</span>
+                                </div>
+                                <div class="algo-stat-line">
+                                    <span>单批重挂阈值:</span>
+                                    <span class="mono-num">当前切片成交达 100% 后触发</span>
+                                </div>
+                                <div class="algo-stat-line">
+                                    <span>防冲击衰减:</span>
+                                    <span class="mono-num text-green">有效规避 Level-2 大单穿透</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-purple">IS ALGO</span>
+                                实施亏损最小化算法 (Almgren-Chriss)
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <p class="panel-desc">指数衰减调度曲线，在市场冲击成本与价格波动风险之间取得帕累托最优。</p>
+                            <div class="algo-stats-box">
+                                <div class="algo-stat-line">
+                                    <span>衰减系数 (λ):</span>
+                                    <span class="mono-num">0.15 (平衡型)</span>
+                                </div>
+                                <div class="algo-stat-line">
+                                    <span>预期基准滑点:</span>
+                                    <span class="mono-num text-cyan">&lt; 3.5 bps</span>
+                                </div>
+                                <div class="algo-stat-line">
+                                    <span>市场冲击惩罚:</span>
+                                    <span class="mono-num text-yellow">自适应二次型流动性抑制</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">TIME-SLICED SCHEDULER</span>
+                                时间切片调度器核心指标
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="algo-stats-box">
+                                <div class="algo-stat-line">
+                                    <span>调度线程状态:</span>
+                                    <span class="mono-num text-green" id="schedulerStateText">ACTIVE (DAEMON)</span>
+                                </div>
+                                <div class="algo-stat-line">
+                                    <span>并发任务总数:</span>
+                                    <span class="mono-num" id="schedTaskCount">0 个任务</span>
+                                </div>
+                                <div class="algo-stat-line">
+                                    <span>最近切片耗时:</span>
+                                    <span class="mono-num text-cyan">&lt; 1.2 ms</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 异步切片执行任务列表 -->
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span class="panel-badge">EXECUTION TASKS</span>
+                            时间切片拆单任务进度大盘
+                        </div>
+                        <div class="panel-controls">
+                            <button class="btn btn-xs btn-outline" id="btnRefreshTasks">刷新任务</button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="table-responsive">
+                            <table class="data-table" id="tableTasks">
+                                <thead>
+                                    <tr>
+                                        <th>任务 ID</th>
+                                        <th>所属账户</th>
+                                        <th>算法类型</th>
+                                        <th>总订单数</th>
+                                        <th>已完成切片</th>
+                                        <th>切片进度</th>
+                                        <th>任务状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyTasks">
+                                    <tr><td colspan="8" class="text-center text-muted">当前暂无调度执行任务</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: LLM 因子投研流水线 -->
+            <div class="tab-pane" id="tab-factor">
+                <div class="grid-2-col">
+                    <!-- 金融假设范式库 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-purple">HYPOTHESIS CATALOGUE</span>
+                                LLM 自主因子假设范式库
+                            </div>
+                            <div class="panel-controls">
+                                <select class="form-select" id="selectHypCategory">
+                                    <option value="">全部范式类别</option>
+                                    <option value="momentum">动量延续 (Momentum)</option>
+                                    <option value="reversal">均值反转 (Reversal)</option>
+                                    <option value="volatility">波动率特征 (Volatility)</option>
+                                    <option value="liquidity">流动性溢价 (Liquidity)</option>
+                                    <option value="order_flow">微观订单流 (Order Flow)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="hypothesis-list" id="hypothesisList">
+                                <!-- 动态渲染金融假设卡片 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 因子自动化挖掘控制台与考核大盘 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-cyan">AUTONOMOUS PIPELINE</span>
+                                自主投研因子挖掘与质量门禁大盘
+                            </div>
+                            <div class="panel-controls">
+                                <button class="btn btn-primary btn-xs" id="btnTriggerMining">
+                                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                    </svg>
+                                    <span>一键触发因子挖掘循环</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="pipeline-status-banner">
+                                <div class="pipeline-kpi">
+                                    <span class="lbl">准入门禁 IC:</span>
+                                    <span class="val mono-num text-cyan">&gt; 0.02</span>
+                                </div>
+                                <div class="pipeline-kpi">
+                                    <span class="lbl">准入门禁 ICIR:</span>
+                                    <span class="val mono-num text-purple">&gt; 0.50</span>
+                                </div>
+                                <div class="pipeline-kpi">
+                                    <span class="lbl">淘汰阈值:</span>
+                                    <span class="val mono-num text-red">ICIR &lt; 0.30</span>
+                                </div>
+                                <div class="pipeline-kpi">
+                                    <span class="lbl">挖掘状态:</span>
+                                    <span class="val mono-num text-green" id="miningStatusText">READY</span>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive" style="margin-top: 12px;">
+                                <table class="data-table" id="tableFactors">
+                                    <thead>
+                                        <tr>
+                                            <th>因子名称</th>
+                                            <th>分类</th>
+                                            <th>IC 均值</th>
+                                            <th>Rank IC</th>
+                                            <th>ICIR</th>
+                                            <th>单调性得分</th>
+                                            <th>生命周期状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyFactors">
+                                        <!-- 动态填充因子指标 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: 强化学习调仓看板 -->
+            <div class="tab-pane" id="tab-rl">
+                <div class="grid-2-col">
+                    <!-- PPO 优化权重计算面板 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge badge-purple">PPO RL AGENT</span>
+                                深度强化学习投资组合调仓优化 (Gymnasium Spec)
+                            </div>
+                            <div class="panel-controls">
+                                <button class="btn btn-primary btn-xs" id="btnRunRlOptimize">运行 PPO 优化</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">投资资产池 (股票代码)</label>
+                                    <input type="text" class="form-input" id="rlSymbolsInput" value="600000.SH, 000001.SZ, 600519.SH, 000858.SZ, 601318.SH">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">风险偏好风格</label>
+                                    <select class="form-select" id="rlRiskTolerance">
+                                        <option value="balanced">稳健型 (Balanced)</option>
+                                        <option value="conservative">保守型 (Conservative)</option>
+                                        <option value="aggressive">进取型 (Aggressive)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">单票权重上限约束</label>
+                                    <input type="number" class="form-input" id="rlMaxWeight" value="0.35" step="0.05" min="0.10" max="1.0">
+                                </div>
+                            </div>
+
+                            <div class="rl-weights-comparison" style="margin-top: 16px;">
+                                <div class="section-subheading">PPO 预测组合权重与等权基准对比:</div>
+                                <div class="weights-bars-container" id="rlWeightsBars">
+                                    <!-- 动态填充权重柱条 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 智能体模型网络与风控闸门大盘 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <span class="panel-badge">AGENT ARCHITECTURE</span>
+                                PPO 智能体网络结构与前置风控闸门
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="rl-meta-grid">
+                                <div class="meta-card">
+                                    <div class="meta-k">强化学习算法</div>
+                                    <div class="meta-v text-cyan">PPO-Clip</div>
+                                </div>
+                                <div class="meta-card">
+                                    <div class="meta-k">神经网络结构</div>
+                                    <div class="meta-v">Actor-Critic Gaussian MLP</div>
+                                </div>
+                                <div class="meta-card">
+                                    <div class="meta-k">隐藏层神经元</div>
+                                    <div class="meta-v mono-num">[128, 128] Tanh</div>
+                                </div>
+                                <div class="meta-card">
+                                    <div class="meta-k">裁剪因子 Clip ε</div>
+                                    <div class="meta-v mono-num">0.20</div>
+                                </div>
+                                <div class="meta-card">
+                                    <div class="meta-k">贴现因子 γ</div>
+                                    <div class="meta-v mono-num">0.99</div>
+                                </div>
+                                <div class="meta-card">
+                                    <div class="meta-k">学习率 Learning Rate</div>
+                                    <div class="meta-v mono-num text-purple">0.0003</div>
+                                </div>
+                            </div>
+
+                            <div class="section-subheading" style="margin-top: 16px;">前置风控闸门与合规指标检测:</div>
+                            <div class="risk-checklist">
+                                <div class="check-item">
+                                    <span class="check-badge pass">PASS</span>
+                                    <span class="check-title">单票持仓集中度上限校验 (Max Stock Weight &le; 35%)</span>
+                                </div>
+                                <div class="check-item">
+                                    <span class="check-badge pass">PASS</span>
+                                    <span class="check-title">最低保留现金比例 (Min Cash Reserve &ge; 5%)</span>
+                                </div>
+                                <div class="check-item">
+                                    <span class="check-badge pass">PASS</span>
+                                    <span class="check-title">资产权重非负无杠杆投影 (Long-Only Simplex Projection)</span>
+                                </div>
+                                <div class="check-item">
+                                    <span class="check-badge pass">PASS</span>
+                                    <span class="check-title">动态最大回撤熔断闸门 (Circuit Breaker Gate Active)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 底部状态指示条 -->
+    <footer class="bottom-footer">
+        <div class="footer-left">
+            <span>QuantCopilot Quantitative Trading System • High-Frequency Execution & Portfolio Management</span>
+        </div>
+        <div class="footer-right">
+            <span class="mono-num" id="systemClock">--:--:--</span>
+        </div>
+    </footer>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

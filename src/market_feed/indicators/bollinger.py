@@ -13,6 +13,10 @@ class StreamingBollingerBands(BaseStreamingIndicator):
 
     def reset(self) -> None:
         self.prices = deque(maxlen=self.window)
+        self.current_mid = 0.0
+        self.current_upper = 0.0
+        self.current_lower = 0.0
+        self.current_pct_b = 0.5
 
     def update(self, tick: MarketTick) -> IndicatorValue:
         self.prices.append(tick.last_price)
@@ -33,6 +37,11 @@ class StreamingBollingerBands(BaseStreamingIndicator):
             upper = round(mean, 4)
             lower = round(mean, 4)
             pct_b = 0.5
+
+        self.current_mid = round(mean, 4)
+        self.current_upper = upper
+        self.current_lower = lower
+        self.current_pct_b = pct_b
 
         band_width = round((upper - lower) / mean, 6) if mean > 0 else 0.0
 

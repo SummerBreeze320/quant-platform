@@ -52,6 +52,9 @@ from src.risk_engine.models import CircuitBreakerLevel, AlertLevel
 from typing import Optional
 
 from src.market_feed.live_feed import LiveFeedManager
+from src.market_feed.strategies.coordinator import RealtimeStrategyCoordinator
+from src.market_feed.strategies.grid import DynamicGridStrategy
+from src.market_feed.strategies.momentum import IntradayMomentumBreakoutStrategy
 
 class MarketRuntime:
     def __init__(
@@ -70,6 +73,28 @@ class MarketRuntime:
         self.signal_engine = SignalEngine(default_strategy_id="hft_stream_01", cooldown_seconds=1.0)
         self.signal_router = SignalRouter(broker=broker, risk_checker=risk_checker)
         self.signal_router.register_strategy("hft_stream_01", auto_execute=True)
+        self.strategy_coordinator = RealtimeStrategyCoordinator(router=self.signal_router)
+        # 预注册常用日内高频策略示例
+        self.strategy_coordinator.register_strategy(
+            DynamicGridStrategy(
+                strategy_id="grid_510300",
+                symbol="510300.SH",
+                base_price=3.50,
+                grid_num_levels=5,
+                grid_step_pct=0.005,
+                order_volume_per_grid=1000,
+            )
+        )
+        self.strategy_coordinator.register_strategy(
+            IntradayMomentumBreakoutStrategy(
+                strategy_id="ofi_breakout_510500",
+                symbol="510500.SH",
+                ofi_threshold=0.50,
+                trailing_stop_pct=0.008,
+                take_profit_pct=0.02,
+                order_volume=500,
+            )
+        )
         self.bus = StreamBus(stream_key="market_stream:ticks")
         self.bus.subscribe(self.on_tick)
         self.replay_engine = TickReplayEngine(stream_bus=self.bus)
@@ -124,3 +149,8 @@ class MarketRuntime:
             if signal:
                 self.signal_router.route_signal(signal)
                 self.connections.broadcast({"type": "SIGNAL", "data": signal.model_dump(mode="json")})
+
+            # 4. 日内微观策略协调调度
+            strat_signals = self.strategy_coordinator.on_tick(tick)
+            for s_sig in strat_signals:
+                self.connections.broadcast({"type": "STRATEGY_SIGNAL", "data": s_sig.model_dump(mode="json")})

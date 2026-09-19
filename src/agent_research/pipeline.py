@@ -92,18 +92,25 @@ class AutonomousFactorPipeline:
 
         # 1. 数据库模式淘汰处理
         if self.db is not None:
-            active_factors = self.db.query(FactorMetadata).filter_by(is_active=True).all()
-            for fac in active_factors:
-                if fac.name in factor_evaluations:
-                    eval_res = factor_evaluations[fac.name]
-                    if abs(eval_res.icir) < min_icir or abs(eval_res.rank_icir) < min_icir:
-                        fac.is_active = False
-                        fac.extra_metrics = fac.extra_metrics or {}
-                        fac.extra_metrics["deprecation_reason"] = f"ICIR decayed to {eval_res.icir:.2f} (threshold: {min_icir})"
-                        fac.extra_metrics["retired_at"] = datetime.now().isoformat()
-                        retired_names.append(fac.name)
-            if retired_names:
-                self.db.commit()
+            try:
+                active_factors = self.db.query(FactorMetadata).filter_by(is_active=True).all()
+                for fac in active_factors:
+                    if fac.name in factor_evaluations:
+                        eval_res = factor_evaluations[fac.name]
+                        if abs(eval_res.icir) < min_icir or abs(eval_res.rank_icir) < min_icir:
+                            fac.is_active = False
+                            fac.extra_metrics = fac.extra_metrics or {}
+                            fac.extra_metrics["deprecation_reason"] = f"ICIR decayed to {eval_res.icir:.2f} (threshold: {min_icir})"
+                            fac.extra_metrics["retired_at"] = datetime.now().isoformat()
+                            retired_names.append(fac.name)
+                if retired_names:
+                    self.db.commit()
+            except Exception as e:
+                logger.warning(f"[FactorPipeline] Database offline in retire: {e}")
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
 
         # 2. 内存注册表同步更新
         for name, entry in self._in_memory_registry.items():
@@ -122,20 +129,23 @@ class AutonomousFactorPipeline:
     def list_active_factors(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """查询当前生效准入的全部因子"""
         if self.db is not None:
-            query = self.db.query(FactorMetadata).filter_by(is_active=True)
-            if category:
-                query = query.filter_by(category=category)
-            return [
-                {
-                    "name": f.name,
-                    "expression": f.expression,
-                    "category": f.category,
-                    "ic_mean": f.ic_mean,
-                    "icir": f.icir,
-                    "created_by": f.created_by,
-                }
-                for f in query.all()
-            ]
+            try:
+                query = self.db.query(FactorMetadata).filter_by(is_active=True)
+                if category:
+                    query = query.filter_by(category=category)
+                return [
+                    {
+                        "name": f.name,
+                        "expression": f.expression,
+                        "category": f.category,
+                        "ic_mean": f.ic_mean,
+                        "icir": f.icir,
+                        "created_by": f.created_by,
+                    }
+                    for f in query.all()
+                ]
+            except Exception as e:
+                logger.warning(f"[FactorPipeline] Database offline in list: {e}")
 
         # 内存回退
         active = [v for v in self._in_memory_registry.values() if v.get("is_active")]
@@ -152,36 +162,43 @@ class AutonomousFactorPipeline:
         is_active = metrics.passed_gate
 
         if self.db is not None:
-            existing = self.db.query(FactorMetadata).filter_by(name=hyp.name).first()
-            if existing:
-                existing.expression = hyp.expression
-                existing.category = hyp.category
-                existing.description = hyp.hypothesis
-                existing.ic_mean = metrics.ic_mean
-                existing.icir = metrics.icir
-                existing.t_stat = metrics.t_stat
-                existing.extra_metrics = metrics.model_dump()
-                existing.is_active = is_active
-                self.db.commit()
-                self.db.refresh(existing)
-                return existing
+            try:
+                existing = self.db.query(FactorMetadata).filter_by(name=hyp.name).first()
+                if existing:
+                    existing.expression = hyp.expression
+                    existing.category = hyp.category
+                    existing.description = hyp.hypothesis
+                    existing.ic_mean = metrics.ic_mean
+                    existing.icir = metrics.icir
+                    existing.t_stat = metrics.t_stat
+                    existing.extra_metrics = metrics.model_dump()
+                    existing.is_active = is_active
+                    self.db.commit()
+                    self.db.refresh(existing)
+                    return existing
 
-            new_record = FactorMetadata(
-                name=hyp.name,
-                expression=hyp.expression,
-                category=hyp.category,
-                description=hyp.hypothesis,
-                ic_mean=metrics.ic_mean,
-                icir=metrics.icir,
-                t_stat=metrics.t_stat,
-                extra_metrics=metrics.model_dump(),
-                created_by="AutonomousAgent",
-                is_active=is_active,
-            )
-            self.db.add(new_record)
-            self.db.commit()
-            self.db.refresh(new_record)
-            return new_record
+                new_record = FactorMetadata(
+                    name=hyp.name,
+                    expression=hyp.expression,
+                    category=hyp.category,
+                    description=hyp.hypothesis,
+                    ic_mean=metrics.ic_mean,
+                    icir=metrics.icir,
+                    t_stat=metrics.t_stat,
+                    extra_metrics=metrics.model_dump(),
+                    created_by="AutonomousAgent",
+                    is_active=is_active,
+                )
+                self.db.add(new_record)
+                self.db.commit()
+                self.db.refresh(new_record)
+                return new_record
+            except Exception as e:
+                logger.warning(f"[FactorPipeline] Database offline in register, falling back to memory: {e}")
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
 
         # 内存注册
         entry = {

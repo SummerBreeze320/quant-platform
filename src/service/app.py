@@ -19,7 +19,11 @@ from src.service.routers import (
     pms_router,
     market_router,
     tasks_router,
+    rl_router,
 )
+from pathlib import Path
+import mimetypes
+from fastapi.responses import HTMLResponse, Response
 
 settings = get_settings()
 
@@ -90,6 +94,30 @@ def create_app(session_factory=None) -> FastAPI:
     app.include_router(pms_router, prefix="/api/v1")
     app.include_router(market_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")
+    app.include_router(rl_router, prefix="/api/v1")
+
+    # QuantCopilot Web Dashboard routes
+    web_dir = Path(__file__).resolve().parent.parent / "web"
+
+    @app.get("/", response_class=HTMLResponse, tags=["Dashboard"])
+    @app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"])
+    def serve_dashboard():
+        index_file = web_dir / "index.html"
+        if index_file.exists():
+            return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>QuantCopilot Web Console (Loading...)</h1>")
+
+    @app.get("/static/{file_path:path}", tags=["Dashboard"])
+    def serve_static(file_path: str):
+        target = (web_dir / "static" / file_path).resolve()
+        # Prevent directory traversal
+        if not str(target).startswith(str(web_dir.resolve())) or not target.is_file():
+            return Response(status_code=404, content="File not found")
+        content_type, _ = mimetypes.guess_type(str(target))
+        return Response(
+            content=target.read_bytes(),
+            media_type=content_type or "application/octet-stream"
+        )
 
     return app
 
