@@ -15,6 +15,8 @@ from src.execution_engine.algos import (
     DirectAlgo,
     TwapAlgo,
     VwapAlgo,
+    IcebergAlgo,
+    ImplementationShortfallAlgo,
 )
 from src.execution_engine.gateway import (
     BaseBrokerGateway,
@@ -43,6 +45,8 @@ __all__ = [
     "DirectAlgo",
     "TwapAlgo",
     "VwapAlgo",
+    "IcebergAlgo",
+    "ImplementationShortfallAlgo",
     "BaseBrokerGateway",
     "PaperBroker",
     "QmtBrokerGateway",

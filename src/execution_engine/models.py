@@ -22,6 +22,8 @@ class AlgoType(str, Enum):
     DIRECT = "DIRECT"
     TWAP = "TWAP"
     VWAP = "VWAP"
+    ICEBERG = "ICEBERG"
+    IS = "IS"
 
 class Position(BaseModel):
     symbol: str

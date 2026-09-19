@@ -3,7 +3,14 @@ from src.execution_engine.models import (
     Order, Trade, AccountState, OrderDirection, OrderStatus, AlgoType, RebalancePlan
 )
 from src.execution_engine.rebalance import RebalanceOrderGenerator
-from src.execution_engine.algos import BaseExecutionAlgo, DirectAlgo, TwapAlgo, VwapAlgo
+from src.execution_engine.algos import (
+    BaseExecutionAlgo,
+    DirectAlgo,
+    TwapAlgo,
+    VwapAlgo,
+    IcebergAlgo,
+    ImplementationShortfallAlgo,
+)
 from src.execution_engine.gateway.base import BaseBrokerGateway
 from src.execution_engine.gateway.paper_broker import PaperBroker
 from src.risk_engine.pre_trade import PreTradeRiskChecker
@@ -35,6 +42,8 @@ class ExecutionCoordinator:
             AlgoType.DIRECT: DirectAlgo(),
             AlgoType.TWAP: TwapAlgo(),
             AlgoType.VWAP: VwapAlgo(),
+            AlgoType.ICEBERG: IcebergAlgo(),
+            AlgoType.IS: ImplementationShortfallAlgo(),
         }
 
     def execute_rebalance(
@@ -58,7 +67,12 @@ class ExecutionCoordinator:
         order_queue = plan.sell_orders + plan.buy_orders
 
         # If ASYNC_SCHEDULED mode requested, delegate slice execution to scheduler
-        if execution_mode == "ASYNC_SCHEDULED" and algo_type in [AlgoType.TWAP, AlgoType.VWAP]:
+        if execution_mode == "ASYNC_SCHEDULED" and algo_type in [
+            AlgoType.TWAP,
+            AlgoType.VWAP,
+            AlgoType.ICEBERG,
+            AlgoType.IS,
+        ]:
             tasks: List[SlicedExecutionTask] = []
             for parent_order in order_queue:
                 slices = algo.slice_order(parent_order)
