@@ -95,30 +95,30 @@ def _sync_factor_to_db(factor_info: Dict[str, Any], feedback, db: Session) -> Op
     factor_name = factor_info.get("factor_name") or "unnamed_factor"
     expression = factor_info.get("expression") or ""
 
-    existing = db.query(FactorMetadata).filter_by(factor_name=factor_name).first()
+    existing = db.query(FactorMetadata).filter_by(name=factor_name).first()
     if existing:
         existing.expression = expression
         existing.description = factor_info.get("description") or existing.description
-        existing.metrics = factor_info.get("metrics", existing.metrics)
-        existing.is_effective = getattr(feedback, "decision", False)
+        existing.extra_metrics = factor_info.get("metrics", existing.extra_metrics)
+        existing.is_active = getattr(feedback, "decision", False)
         db.commit()
         db.refresh(existing)
         logger.info(f"Updated factor '{factor_name}' (id={existing.id}).")
         return existing
 
     record = FactorMetadata(
-        factor_name=factor_name,
+        name=factor_name,
         expression=expression,
         description=factor_info.get("description") or "",
-        factor_type="alpha",
+        category="alpha",
         created_by="RD-Agent",
-        is_effective=getattr(feedback, "decision", False),
-        metrics=factor_info.get("metrics", {}),
+        is_active=getattr(feedback, "decision", False),
+        extra_metrics=factor_info.get("metrics", {}),
     )
     db.add(record)
     db.commit()
     db.refresh(record)
-    logger.info(f"Created factor '{factor_name}' (id={record.id}, effective={record.is_effective}).")
+    logger.info(f"Created factor '{factor_name}' (id={record.id}, effective={record.is_active}).")
     return record
 
 
